@@ -7,7 +7,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from io import BytesIO
 import base64
 
-app = Flask(__name__)
+# Configuración de carpetas para que funcione en la nube
+app = Flask(__name__, 
+            static_folder='static', 
+            template_folder='templates')
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
@@ -24,14 +27,18 @@ def extract():
         return jsonify({'error': 'URL no proporcionada'}), 400
 
     try:
-        response = requests.get(url, timeout=5)
+        # User-agent para evitar que el diario nos bloquee por parecer un bot
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
 
         titulo = soup.find('meta', property='og:title')
         titulo = titulo['content'] if titulo else soup.title.string
 
         url_part = urlparse(url)
-        categoria = url_part.path.split('/')[1]
+        # Manejo simple de categoría basado en la URL
+        path_parts = [p for p in url_part.path.split('/') if p]
+        categoria = path_parts[0].upper() if path_parts else "NOTICIAS"
         
         meta_image = soup.find('meta', property='og:image')
         imagen_url = meta_image['content'] if meta_image else None
@@ -44,59 +51,63 @@ def extract():
             'categoria': categoria,
             'imagen_url': imagen_url
         })
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Error al obtener la URL: {e}'}), 500
     except Exception as e:
-        return jsonify({'error': f'Error inesperado: {e}'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/generate-base', methods=['POST'])
-def generate_base():
+@app.route('/api/proxy-image')
+def proxy_image():
+    url = request.args.get('url')
+    if not url:
+        return "No URL provided", 400
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = requests.get(url, headers=headers)
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        return str(e), 500
+
+@app.route('/api/process-image', methods=['POST'])
+def process_image():
     data = request.json
-    imagen_url = data.get('imagen_url')
-
-    if not imagen_url:
-        return jsonify({'error': 'URL de imagen no proporcionada'}), 400
+    img_data = data.get('image')
+    if not img_data:
+        return jsonify({'error': 'No image data'}), 400
 
     try:
-        image_response = requests.get(imagen_url, stream=True)
-        img = Image.open(image_response.raw).convert("RGB")
+        # Quitar el encabezado base64 si existe
+        if ',' in img_data:
+            img_data = img_data.split(',')[1]
         
-        # Tamaño objetivo (cuadrado para Instagram)
-        target_size = (1080, 1080)
+        img_bytes = base64.b64decode(img_data)
+        img = Image.open(BytesIO(img_bytes))
         
-        # Calcular proporciones para "cover" (escalar y recortar sin distorsionar)
-        img_width, img_height = img.size
-        target_width, target_height = target_size
-        
-        # Ratio del canvas (siempre 1 para cuadrado)
+        # Convertir a RGB si es necesario (para JPG)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        # El proceso de redimensionado que ya tenías
+        target_width, target_height = 1080, 1080
         canvas_ratio = target_width / target_height
-        
-        # Ratio de la imagen original
+        img_width, img_height = img.size
         img_ratio = img_width / img_height
         
-        # Determinar el lado restrictivo para escalar
         if img_ratio > canvas_ratio:
-            # Imagen más ancha: escalar por altura y recortar lados
             new_height = target_height
             new_width = int(img_width * (new_height / img_height))
         else:
-            # Imagen más alta: escalar por ancho y recortar arriba/abajo
             new_width = target_width
             new_height = int(img_height * (new_width / img_width))
         
-        # Redimensionar manteniendo proporción
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # Recortar al centro para ajustarse exactamente al target_size
         left = (new_width - target_width) // 2
         top = (new_height - target_height) // 2
         right = left + target_width
         bottom = top + target_height
         img = img.crop((left, top, right, bottom))
         
-        # Ahora img es exactamente 1080x1080 sin distorsión
         buffered = BytesIO()
-        img.save(buffered, format="PNG") 
+        img.save(buffered, format="JPEG", quality=90) 
         base64_img = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
         return jsonify({
@@ -104,9 +115,13 @@ def generate_base():
             'width': 1080,
             'height': 1080
         })
-
     except Exception as e:
-        return jsonify({'error': f'Error al generar la imagen base: {e}'}), 500
-        
+        print(f"Error procesando imagen: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ESTA PARTE ES CLAVE PARA QUE FUNCIONE EN INTERNET
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Render asigna un puerto automáticamente en la variable de entorno PORT
+    port = int(os.environ.get('PORT', 5000))
+    # En producción usamos 0.0.0.0 para que sea accesible externamente
+    app.run(host='0.0.0.0', port=port)
