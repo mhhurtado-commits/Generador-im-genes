@@ -44,10 +44,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     try {
-        // CORRECCIÓN: Nombres exactos de archivos para Linux (Render)
+        // CORRECCIÓN CRÍTICA PARA RENDER: Nombres exactos de archivos (Case Sensitive)
         await Promise.all([
             loadFont('Economica-Regular', '/static/fonts/Economica-Regular.ttf'),
-            loadFont('BebasNeue-Regular', '/static/fonts/BebasNeue-Regular.ttf'),
+            loadFont('BebasNeue-Regular', '/static/fonts/BebasNeue-Regular.ttf'), // Antes Bebasneue-regular
             loadFont('Montserrat-Regular', '/static/fonts/Montserrat-Regular.ttf')
         ]);
         console.log("Fuentes cargadas con éxito.");
@@ -178,7 +178,7 @@ function clearForm() {
     document.getElementById('imageUpload').value = '';
     document.getElementById('logoSelect').value = 'logo.png';
     document.getElementById('emojiEnabled').checked = false;
-    // toggleEmojiSelector(); // Eliminado si no existe la función
+    
     document.getElementById('sizeSelect').value = '1080x1080';
     document.getElementById('blurRange').value = '0';
     document.getElementById('blurValue').textContent = '0';
@@ -511,7 +511,7 @@ async function generatePreview() {
 
             let imageDataURL = localImageDataURL;
             if (!imageDataURL) {
-                // CORRECCIÓN: Llamada a endpoint correcto
+                // CORRECCIÓN: Asegurar llamada al endpoint de Render
                 const genRes = await fetch('/api/generate-base', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -539,7 +539,7 @@ async function generatePreview() {
                 updateExportButtonPosition();
                 btn.disabled = false;
                 btn.innerText = "Generar Preview";
-            }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
+            }, { crossOrigin: 'anonymous' }); 
 
         } catch (err) {
             console.error(err);
@@ -596,7 +596,7 @@ function generateManualPreview() {
             logoObj = logo;
             addEmojiIfEnabled();
         }
-    }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
+    }, { crossOrigin: 'anonymous' }); 
 
     fabricCanvas.renderAll();
     updateExportButtonPosition();
@@ -619,7 +619,7 @@ function addEmojiIfEnabled() {
                 emojiObj = emoji;
                 fabricCanvas.renderAll();
             }
-        }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
+        }, { crossOrigin: 'anonymous' }); 
     }
 }
 
@@ -637,7 +637,6 @@ function changeSize() {
 
 // ---------- EXPORTAR IMAGEN ----------
 function exportImage() {
-    // CORRECCIÓN: Método de descarga compatible con navegadores modernos y CORS
     const dataURL = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
     const link = document.createElement('a');
     link.download = `preview-${Date.now()}.png`;
@@ -681,5 +680,5 @@ function addTextAndLogoToCanvas(data, width, height) {
             logoObj = logo;
             addEmojiIfEnabled();
         }
-    }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
+    }, { crossOrigin: 'anonymous' }); 
 }
