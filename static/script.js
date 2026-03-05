@@ -44,9 +44,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     try {
+        // CORRECCIÓN: Nombres exactos de archivos para Linux (Render)
         await Promise.all([
             loadFont('Economica-Regular', '/static/fonts/Economica-Regular.ttf'),
-            loadFont('Bebasneue-regular', '/static/fonts/Bebasneue-regular.ttf'),
+            loadFont('BebasNeue-Regular', '/static/fonts/BebasNeue-Regular.ttf'),
             loadFont('Montserrat-Regular', '/static/fonts/Montserrat-Regular.ttf')
         ]);
         console.log("Fuentes cargadas con éxito.");
@@ -177,7 +178,7 @@ function clearForm() {
     document.getElementById('imageUpload').value = '';
     document.getElementById('logoSelect').value = 'logo.png';
     document.getElementById('emojiEnabled').checked = false;
-    toggleEmojiSelector();
+    // toggleEmojiSelector(); // Eliminado si no existe la función
     document.getElementById('sizeSelect').value = '1080x1080';
     document.getElementById('blurRange').value = '0';
     document.getElementById('blurValue').textContent = '0';
@@ -279,6 +280,7 @@ function checkCenterWhileDragging(obj) {
 
 // ---------- MANEJO DE OBJETOS ----------
 function syncRectToText(rect, textbox) {
+    if(!rect || !textbox) return;
     const textWidth = textbox.width * textbox.scaleX;
     const textHeight = textbox.height * textbox.scaleY;
     const paddedWidth = textWidth + (textbox.padding * 2);
@@ -290,7 +292,8 @@ function syncRectToText(rect, textbox) {
         width: paddedWidth,
         height: paddedHeight,
         originX: textbox.originX,
-        originY: textbox.originY
+        originY: textbox.originY,
+        angle: textbox.angle
     });
     rect.setCoords();
     fabricCanvas.renderAll();
@@ -316,11 +319,7 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
         hasControls: true,
         hasBorders: true,
         editable: true,
-        lockMovementX: false,
-        lockMovementY: false,
-        lockScalingX: false,
-        lockScalingY: false,
-        lockRotation: false
+        padding: 20
     });
 
     fabricCanvas.add(rect);
@@ -345,8 +344,7 @@ function updateImageFX() {
 
     currentImage.filters = [];
     if (blurAmount > 0) {
-        const blurValue = blurAmount / 1000;
-        const blurFilter = new fabric.Image.filters.Blur({ blur: blurValue });
+        const blurFilter = new fabric.Image.filters.Blur({ blur: blurAmount / 1000 });
         currentImage.filters.push(blurFilter);
     }
     currentImage.applyFilters();
@@ -431,8 +429,8 @@ function adjustImageToCanvas() {
 
     const canvasWidth = fabricCanvas.width;
     const canvasHeight = fabricCanvas.height;
-    const imageWidth = currentImage.getOriginalSize().width;
-    const imageHeight = currentImage.getOriginalSize().height;
+    const imageWidth = currentImage.width;
+    const imageHeight = currentImage.height;
 
     const canvasRatio = canvasWidth / canvasHeight;
     const imageRatio = imageWidth / imageHeight;
@@ -458,42 +456,19 @@ function adjustImageToCanvas() {
 
 // ---------- REDIMENSIONAR Y REPOSICIONAR OBJETOS ----------
 function resizeAllObjects(newWidth, newHeight) {
-    const oldWidth = fabricCanvas.width;
-    const oldHeight = fabricCanvas.height;
-
     if (darknessOverlay) {
-        darknessOverlay.set({
-            width: newWidth,
-            height: newHeight
-        });
+        darknessOverlay.set({ width: newWidth, height: newHeight });
     }
-
-    if (currentImage) {
-        adjustImageToCanvas();
-    }
+    if (currentImage) adjustImageToCanvas();
 
     if (currentNewsData) {
-        if (categoriaTextbox) fabricCanvas.remove(categoriaTextbox);
-        if (categoriaRect) fabricCanvas.remove(categoriaRect);
-        if (tituloTextbox) fabricCanvas.remove(tituloTextbox);
-        if (tituloRect) fabricCanvas.remove(tituloRect);
-        if (logoObj) fabricCanvas.remove(logoObj);
-        if (emojiObj) fabricCanvas.remove(emojiObj);
-
+        [categoriaTextbox, categoriaRect, tituloTextbox, tituloRect, logoObj, emojiObj].forEach(o => o && fabricCanvas.remove(o));
         addTextAndLogoToCanvas(currentNewsData, newWidth, newHeight);
     }
 
     if (dateText || headerText || bodyText) {
-        if (dateText) fabricCanvas.remove(dateText);
-        if (headerText) fabricCanvas.remove(headerText);
-        if (bodyText) fabricCanvas.remove(bodyText);
-        if (logoObj) fabricCanvas.remove(logoObj);
-        if (emojiObj) fabricCanvas.remove(emojiObj);
-
-        const mode = document.getElementById('modeSelect').value;
-        if (mode === 'manual') {
-            generateManualPreview();
-        }
+        [dateText, headerText, bodyText, logoObj, emojiObj].forEach(o => o && fabricCanvas.remove(o));
+        if (document.getElementById('modeSelect').value === 'manual') generateManualPreview();
     }
 
     fabricCanvas.renderAll();
@@ -502,24 +477,26 @@ function resizeAllObjects(newWidth, newHeight) {
 // ---------- AJUSTAR POSICIÓN DEL BOTÓN EXPORTAR ----------
 function updateExportButtonPosition() {
     const canvasWrapper = document.getElementById('canvas-wrapper');
-    const canvasHeight = fabricCanvas.height;
-    const scale = 0.5;
-    canvasWrapper.style.height = `${canvasHeight * scale}px`;
+    if(canvasWrapper) {
+        const canvasHeight = fabricCanvas.height;
+        const scale = 0.5;
+        canvasWrapper.style.height = `${canvasHeight * scale}px`;
+    }
 }
 
 // ---------- GENERAR PREVIEW ----------
 async function generatePreview() {
     const mode = document.getElementById('modeSelect').value;
+    const btn = document.getElementById('generateButton');
+    btn.disabled = true;
+    btn.innerText = "Generando...";
 
     fabricCanvas.clear();
     fabricCanvas.discardActiveObject().renderAll();
 
     if (mode === 'link') {
         const url = document.getElementById('urlInput').value;
-        if (!url) { 
-            alert('Ingresa un URL'); 
-            return; 
-        }
+        if (!url) { alert('Ingresa un URL'); btn.disabled = false; btn.innerText = "Generar Preview"; return; }
 
         try {
             const extractRes = await fetch('/api/extract', {
@@ -528,57 +505,52 @@ async function generatePreview() {
                 body: JSON.stringify({ url })
             });
             const datos = await extractRes.json();
-            if (datos.error) { 
-                alert('Error: ' + datos.error); 
-                return; 
-            }
+            if (datos.error) throw new Error(datos.error);
 
             currentNewsData = datos;
 
             let imageDataURL = localImageDataURL;
             if (!imageDataURL) {
+                // CORRECCIÓN: Llamada a endpoint correcto
                 const genRes = await fetch('/api/generate-base', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(datos)
                 });
-                const { image_base64 } = await genRes.json();
-                imageDataURL = `data:image/png;base64,${image_base64}`;
+                const imgData = await genRes.json();
+                imageDataURL = `data:image/png;base64,${imgData.image_base64}`;
                 currentImageDataURL = imageDataURL;
             }
 
             fabric.Image.fromURL(imageDataURL, img => {
                 currentImage = img;
                 darknessOverlay = new fabric.Rect({
-                    left: 0,
-                    top: 0,
-                    width: fabricCanvas.width,
-                    height: fabricCanvas.height,
-                    fill: 'black',
-                    opacity: parseFloat(document.getElementById('opacityRange').value),
-                    selectable: false,
-                    evented: false
+                    left: 0, top: 0, width: fabricCanvas.width, height: fabricCanvas.height,
+                    fill: 'black', opacity: parseFloat(document.getElementById('opacityRange').value),
+                    selectable: false, evented: false
                 });
-
-                currentImage.filters = [];
-                updateImageFX();
 
                 fabricCanvas.add(currentImage);
                 fabricCanvas.add(darknessOverlay);
-                
                 adjustImageToCanvas();
+                updateImageFX();
                 addTextAndLogoToCanvas(currentNewsData, fabricCanvas.width, fabricCanvas.height);
                 addEmojiIfEnabled();
-                fabricCanvas.renderAll();
-
                 updateExportButtonPosition();
-            });
+                btn.disabled = false;
+                btn.innerText = "Generar Preview";
+            }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
+
         } catch (err) {
             console.error(err);
-            alert('Error generando preview');
+            alert('Error: ' + err.message);
+            btn.disabled = false;
+            btn.innerText = "Generar Preview";
         }
     } else if (mode === 'manual') {
         generateManualPreview();
+        btn.disabled = false;
+        btn.innerText = "Generar Preview";
     }
 }
 
@@ -586,65 +558,28 @@ async function generatePreview() {
 function generateManualPreview() {
     const date = document.getElementById('dateInput').value || getCurrentDateTime();
     const header = document.getElementById('headerInput').value || 'Alerta Tormenta';
-    const body = document.getElementById('bodyInput').value || 'ATENCIÓN: TORMENTAS DÉBILES CON ACTIVIDAD ELÉCTRICA SOBRE EL CAÑÓN DEL ATUEL, VALLE GRANDE Y OESTE DEL EMBALSE; SIN GRANIZO POR EL MOMENTO. ING. RAÚL R. BESA';
+    const body = document.getElementById('bodyInput').value || '';
 
     const blackBackground = new fabric.Rect({
-        left: 0,
-        top: 0,
-        width: fabricCanvas.width,
-        height: fabricCanvas.height,
-        fill: 'black',
-        selectable: false,
-        evented: false
+        left: 0, top: 0, width: fabricCanvas.width, height: fabricCanvas.height,
+        fill: 'black', selectable: false, evented: false
     });
     fabricCanvas.add(blackBackground);
 
     dateText = new fabric.Textbox(date, {
-        left: 20,
-        top: 20,
-        fontFamily: 'Bebasneue-regular',
-        fontSize: 40,
-        fill: 'white',
-        textAlign: 'left',
-        originX: 'left',
-        originY: 'top',
-        selectable: true,
-        hasControls: true,
-        hasBorders: true,
-        editable: true
+        left: 20, top: 20, fontFamily: 'BebasNeue-Regular', fontSize: 40, fill: 'white', originX: 'left'
     });
     fabricCanvas.add(dateText);
 
     headerText = new fabric.Textbox(header, {
-        left: fabricCanvas.width / 2,
-        top: 90,
-        fontFamily: 'Bebasneue-regular',
-        fontSize: 60,
-        fill: '#cc0000',
-        textAlign: 'center',
-        originX: 'center',
-        originY: 'top',
-        selectable: true,
-        hasControls: true,
-        hasBorders: true,
-        editable: true
+        left: fabricCanvas.width / 2, top: 90, fontFamily: 'BebasNeue-Regular',
+        fontSize: 60, fill: '#cc0000', textAlign: 'center', originX: 'center'
     });
     fabricCanvas.add(headerText);
 
     bodyText = new fabric.Textbox(body, {
-        left: fabricCanvas.width / 2,
-        top: 170,
-        width: fabricCanvas.width * 0.8,
-        fontFamily: 'Bebasneue-regular',
-        fontSize: 70,
-        fill: 'white',
-        textAlign: 'center',
-        originX: 'center',
-        originY: 'top',
-        selectable: true,
-        hasControls: true,
-        hasBorders: true,
-        editable: true
+        left: fabricCanvas.width / 2, top: 170, width: fabricCanvas.width * 0.8,
+        fontFamily: 'BebasNeue-Regular', fontSize: 70, fill: 'white', textAlign: 'center', originX: 'center'
     });
     fabricCanvas.add(bodyText);
 
@@ -652,27 +587,16 @@ function generateManualPreview() {
     fabric.Image.fromURL(`/static/${logoPath}`, logo => {
         if (logo) {
             logo.set({
-                left: fabricCanvas.width / 2,
-                top: fabricCanvas.height * 0.9,
-                scaleX: 250 / logo.width,
-                scaleY: 60 / logo.height,
-                selectable: true,
-                hasControls: true,
-                hasBorders: true,
-                originX: 'center',
-                originY: 'center',
-                shadow: new fabric.Shadow({
-                    color: 'rgba(0,0,0,0.5)',
-                    blur: 10,
-                    offsetX: 5,
-                    offsetY: 5
-                })
+                left: fabricCanvas.width / 2, top: fabricCanvas.height * 0.9,
+                scaleX: 250 / logo.width, scaleY: 60 / logo.height,
+                originX: 'center', originY: 'center',
+                shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
             });
             fabricCanvas.add(logo);
             logoObj = logo;
             addEmojiIfEnabled();
         }
-    }, { crossOrigin: 'anonymous' });
+    }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
 
     fabricCanvas.renderAll();
     updateExportButtonPosition();
@@ -680,90 +604,47 @@ function generateManualPreview() {
 
 // ---------- AGREGAR EMOJI CENTRADO ARRIBA ----------
 function addEmojiIfEnabled() {
-    // Eliminar emoji anterior si existe
-    if (emojiObj) {
-        fabricCanvas.remove(emojiObj);
-        emojiObj = null;
-    }
-
-    if (document.getElementById('emojiEnabled').checked && document.getElementById('emojiSelect')) {
+    if (emojiObj) fabricCanvas.remove(emojiObj);
+    if (document.getElementById('emojiEnabled').checked) {
         const emojiURL = document.getElementById('emojiSelect').value;
         fabric.Image.fromURL(emojiURL, emoji => {
             if (emoji) {
                 emoji.set({
-                    left: fabricCanvas.width / 2,
-                    top: 120,  // Posición fija arriba, debajo del borde superior
-                    scaleX: 0.9,
-                    scaleY: 0.9,
-                    originX: 'center',
-                    originY: 'center',
-                    selectable: true,
-                    hasControls: true,
-                    hasBorders: true,
-                    shadow: new fabric.Shadow({
-                        color: 'rgba(0,0,0,0.6)',
-                        blur: 15,
-                        offsetX: 5,
-                        offsetY: 5
-                    })
+                    left: fabricCanvas.width / 2, top: 120, scaleX: 0.9, scaleY: 0.9,
+                    originX: 'center', originY: 'center',
+                    shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.6)', blur: 15, offsetX: 5, offsetY: 5 })
                 });
                 fabricCanvas.add(emoji);
                 emoji.bringToFront();
                 emojiObj = emoji;
                 fabricCanvas.renderAll();
             }
-        }, { crossOrigin: 'anonymous' });
+        }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
     }
 }
 
 // ---------- CAMBIAR TAMAÑO ----------
 function changeSize() {
     const [newW, newH] = document.getElementById('sizeSelect').value.split('x').map(Number);
-    
     fabricCanvas.setDimensions({ width: newW, height: newH });
     if (canvasContainer) {
         canvasContainer.style.width = `${newW}px`;
         canvasContainer.style.height = `${newH}px`;
     }
-
     resizeAllObjects(newW, newH);
     updateExportButtonPosition();
 }
 
 // ---------- EXPORTAR IMAGEN ----------
 function exportImage() {
-    const blurAmount = parseFloat(document.getElementById('blurRange').value);
-    if (blurAmount > 0) {
-        currentImage.filters = [];
-        const blurValue = blurAmount / 1000;
-        const blurFilter = new fabric.Image.filters.Blur({ blur: blurValue });
-        currentImage.filters.push(blurFilter);
-        currentImage.applyFilters();
-        fabricCanvas.renderAll();
-    }
-
+    // CORRECCIÓN: Método de descarga compatible con navegadores modernos y CORS
     const dataURL = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
-
-    if (blurAmount > 0 && currentImageDataURL) {
-        fabric.Image.fromURL(currentImageDataURL, img => {
-            fabricCanvas.remove(currentImage);
-            currentImage = img;
-            fabricCanvas.add(currentImage);
-            currentImage.sendToBack();
-            if (darknessOverlay) darknessOverlay.bringToFront();
-            if (dateText) dateText.bringToFront();
-            if (headerText) headerText.bringToFront();
-            if (bodyText) bodyText.bringToFront();
-            if (logoObj) logoObj.bringToFront();
-            if (emojiObj) emojiObj.bringToFront();
-            if (categoriaTextbox) categoriaTextbox.bringToFront();
-            if (tituloTextbox) tituloTextbox.bringToFront();
-            adjustImageToCanvas();
-            updateImageFX();
-        });
-    }
-
-    window.open(dataURL, '_blank');
+    const link = document.createElement('a');
+    link.download = `preview-${Date.now()}.png`;
+    link.href = dataURL;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // ---------- AÑADIR TEXTO Y LOGO (MODO LINK) ----------
@@ -771,64 +652,34 @@ function addTextAndLogoToCanvas(data, width, height) {
     if (!data) return;
 
     const sanitizedCategory = data.categoria.replace(/_/g, ' ');
-    const capitalized = sanitizedCategory
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' ');
+    const capitalized = sanitizedCategory.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
     const cat = createTextWithRect(capitalized, {
-        id: 'categoria',
-        left: width / 2,
-        top: height * 0.05,
-        fontFamily: 'Economica-Regular',
-        fontSize: 66,
-        textAlign: 'center',
-        width: 550,
-        originX: 'center',
-        originY: 'top'
+        id: 'categoria', left: width / 2, top: height * 0.05,
+        fontFamily: 'Economica-Regular', fontSize: 66, textAlign: 'center', width: 550, originX: 'center'
     }, document.getElementById('categoriaBgColor').value, document.getElementById('categoriaBgOpacity').value, document.getElementById('categoriaTextColor').value);
     categoriaTextbox = cat.textbox;
     categoriaRect = cat.rect;
-    syncRectToText(categoriaRect, categoriaTextbox);
 
     const tit = createTextWithRect(data.titulo, {
-        id: 'titulo',
-        left: width / 2,
-        top: height / 2,
-        width: width * 0.8,
-        fontFamily: 'Bebasneue-regular',
-        fontSize: 70,
-        textAlign: 'center',
-        originX: 'center',
-        originY: 'center'
+        id: 'titulo', left: width / 2, top: height / 2, width: width * 0.8,
+        fontFamily: 'BebasNeue-Regular', fontSize: 70, textAlign: 'center', originX: 'center', originY: 'center'
     }, document.getElementById('tituloBgColor').value, document.getElementById('tituloBgOpacity').value, document.getElementById('tituloTextColor').value);
     tituloTextbox = tit.textbox;
     tituloRect = tit.rect;
-    syncRectToText(tituloRect, tituloTextbox);
 
     const logoPath = document.getElementById('logoSelect').value;
     fabric.Image.fromURL(`/static/${logoPath}`, logo => {
         if (logo) {
             logo.set({
-                left: width / 2,
-                top: height * 0.9,
-                scaleX: 330 / logo.width,
-                scaleY: 79 / logo.height,
-                selectable: true,
-                hasControls: true,
-                hasBorders: false,
-                originX: 'center',
-                originY: 'center',
-                shadow: new fabric.Shadow({
-                    color: 'rgba(0,0,0,0.5)',
-                    blur: 10,
-                    offsetX: 5,
-                    offsetY: 5
-                })
+                left: width / 2, top: height * 0.9,
+                scaleX: 330 / logo.width, scaleY: 79 / logo.height,
+                originX: 'center', originY: 'center',
+                shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
             });
             fabricCanvas.add(logo);
             logoObj = logo;
             addEmojiIfEnabled();
         }
-    }, { crossOrigin: 'anonymous' });
+    }, { crossOrigin: 'anonymous' }); // CORRECCIÓN: CORS
 }
