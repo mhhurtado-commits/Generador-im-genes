@@ -1,309 +1,757 @@
-<!-- index.html con modificaciones para funcionamiento online -->
-<!-- No se requieren cambios significativos en este archivo, ya que las rutas son relativas y el script se carga desde /static/script.js. -->
-<!-- Si el frontend está separado (ej: GitHub Pages), ajusta el <script src> a una URL absoluta si es necesario, pero asumiendo despliegue integrado en Render, está bien. -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generador de Previews</title>
-    <style>
-        :root {
-            --verde-mm: #a6ce39;
-            --verde-osc: #8fb82d;
-            --verde-cl: #f5f9e8;
-            --bg-light: #f5f9e8;
-            --bg-dark: #333;
-            --text-light: #333;
-            --text-dark: #fff;
-            --control-bg-light: #fff;
-            --control-bg-dark: #444;
+// static/script.js - Versión completa y corregida para Render
+
+const baseURL = window.location.origin;
+
+// Variables globales
+let fabricCanvas = null;
+let currentImage = null;
+let canvasContainer = null;
+let tituloTextbox = null;
+let categoriaTextbox = null;
+let tituloRect = null;
+let categoriaRect = null;
+let centerLines = { h: null, v: null };
+let logoObj = null;
+let currentNewsData = null;
+let darknessOverlay = null;
+let currentImageDataURL = null;
+let localImageDataURL = null;
+
+// ──────────────────────────────────────────────────────────────
+// INICIALIZACIÓN
+// ──────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    const canvasEl = document.getElementById('canvas');
+    fabricCanvas = new fabric.Canvas(canvasEl, {
+        width: 1080,
+        height: 1080,
+        preserveObjectStacking: true,
+        selection: true,
+        backgroundColor: 'var(--verde-cl)'
+    });
+
+    canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer) {
+        canvasContainer.style.width = `${fabricCanvas.width}px`;
+        canvasContainer.style.height = `${fabricCanvas.height}px`;
+    }
+
+    fabric.Object.prototype.set({
+        borderColor: '#8fb82d',
+        cornerColor: '#8fb82d',
+        cornerSize: 12,
+        borderScaleFactor: 2,
+        transparentCorners: false
+    });
+
+    // Cargar fuentes
+    try {
+        await Promise.all([
+            loadFont('Economica-Regular', '/static/fonts/Economica-Regular.ttf'),
+            loadFont('Bebasneue-regular', '/static/fonts/Bebasneue-regular.ttf'),
+            loadFont('Montserrat-Regular', '/static/fonts/Montserrat-Regular.ttf')
+        ]);
+        console.log("Fuentes cargadas correctamente");
+    } catch (err) {
+        console.error("Error al cargar fuentes:", err);
+    }
+
+    // Cargar tema guardado
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.body.className = savedTheme;
+    const themeSelect = document.getElementById('themeToggle');
+    if (themeSelect) themeSelect.value = savedTheme;
+
+    // Eventos
+    themeSelect?.addEventListener('change', () => {
+        const newTheme = themeSelect.value;
+        document.body.className = newTheme;
+        localStorage.setItem('theme', newTheme);
+    });
+
+    document.getElementById('blurRange')?.addEventListener('input', () => {
+        document.getElementById('blurValue').textContent = document.getElementById('blurRange').value;
+        updateImageFX();
+    });
+
+    document.getElementById('opacityRange')?.addEventListener('input', () => {
+        document.getElementById('opacityValue').textContent = document.getElementById('opacityRange').value;
+        updateImageFX();
+    });
+
+    document.getElementById('categoriaTextColor')?.addEventListener('change', handleCategoriaTextColorChange);
+    document.getElementById('categoriaBgColor')?.addEventListener('change', handleCategoriaBgColorChange);
+    document.getElementById('categoriaBgOpacity')?.addEventListener('input', () => {
+        document.getElementById('categoriaBgOpacityValue').textContent = document.getElementById('categoriaBgOpacity').value;
+        updateCategoryStyle();
+    });
+
+    document.getElementById('tituloTextColor')?.addEventListener('change', handleTituloTextColorChange);
+    document.getElementById('tituloBgColor')?.addEventListener('change', handleTituloBgColorChange);
+    document.getElementById('tituloBgOpacity')?.addEventListener('input', () => {
+        document.getElementById('tituloBgOpacityValue').textContent = document.getElementById('tituloBgOpacity').value;
+        updateTitleStyle();
+    });
+
+    ['categoriaTextColorPicker', 'categoriaBgColorPicker', 'tituloTextColorPicker', 'tituloBgColorPicker']
+        .forEach(id => document.getElementById(id)?.addEventListener('input', () => {
+            if (id.includes('categoria')) updateCategoryStyle();
+            if (id.includes('titulo')) updateTitleStyle();
+        }));
+
+    document.getElementById('clearButton')?.addEventListener('click', clearForm);
+    document.getElementById('generateButton')?.addEventListener('click', generatePreview);
+    document.getElementById('sizeSelect')?.addEventListener('change', changeSize);
+
+    // Guardar plantilla
+    document.getElementById('saveTemplate')?.addEventListener('click', () => {
+        const name = document.getElementById('templateName')?.value.trim();
+        if (!name) return alert('Ingresa un nombre para la plantilla');
+        
+        const config = {
+            size: document.getElementById('sizeSelect')?.value,
+            blur: document.getElementById('blurRange')?.value,
+            opacity: document.getElementById('opacityRange')?.value,
+            categoriaTextColor: document.getElementById('categoriaTextColor')?.value,
+            categoriaTextColorPicker: document.getElementById('categoriaTextColor')?.value === 'custom' ? document.getElementById('categoriaTextColorPicker')?.value : null,
+            categoriaBgColor: document.getElementById('categoriaBgColor')?.value,
+            categoriaBgColorPicker: document.getElementById('categoriaBgColor')?.value === 'custom' ? document.getElementById('categoriaBgColorPicker')?.value : null,
+            categoriaBgOpacity: document.getElementById('categoriaBgOpacity')?.value,
+            tituloTextColor: document.getElementById('tituloTextColor')?.value,
+            tituloTextColorPicker: document.getElementById('tituloTextColor')?.value === 'custom' ? document.getElementById('tituloTextColorPicker')?.value : null,
+            tituloBgColor: document.getElementById('tituloBgColor')?.value,
+            tituloBgColorPicker: document.getElementById('tituloBgColor')?.value === 'custom' ? document.getElementById('tituloBgColorPicker')?.value : null,
+            tituloBgOpacity: document.getElementById('tituloBgOpacity')?.value
+        };
+
+        let templates = JSON.parse(localStorage.getItem('templates') || '{}');
+        templates[name] = config;
+        localStorage.setItem('templates', JSON.stringify(templates));
+        updateTemplateSelect();
+        document.getElementById('templateName').value = '';
+    });
+
+    // Cargar plantilla
+    document.getElementById('loadTemplate')?.addEventListener('change', (e) => {
+        const name = e.target.value;
+        if (!name) return;
+        const templates = JSON.parse(localStorage.getItem('templates') || '{}');
+        const config = templates[name];
+        if (!config) return;
+
+        Object.assign(document.getElementById('sizeSelect') || {}, {value: config.size});
+        document.getElementById('blurRange').value = config.blur;
+        document.getElementById('blurValue').textContent = config.blur;
+        document.getElementById('opacityRange').value = config.opacity;
+        document.getElementById('opacityValue').textContent = config.opacity;
+
+        // Colores categoría
+        document.getElementById('categoriaTextColor').value = config.categoriaTextColor;
+        if (document.getElementById('categoriaTextColorPicker')) {
+            document.getElementById('categoriaTextColorPicker').value = config.categoriaTextColorPicker || '#ffffff';
+            document.getElementById('categoriaTextColorPicker').style.display = config.categoriaTextColor === 'custom' ? 'block' : 'none';
         }
 
-        body {
-            font-family: 'Montserrat-Regular', Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-light);
-            color: var(--text-light);
+        document.getElementById('categoriaBgColor').value = config.categoriaBgColor;
+        if (document.getElementById('categoriaBgColorPicker')) {
+            document.getElementById('categoriaBgColorPicker').value = config.categoriaBgColorPicker || '#ffffff';
+            document.getElementById('categoriaBgColorPicker').style.display = config.categoriaBgColor === 'custom' ? 'block' : 'none';
+        }
+        document.getElementById('categoriaBgOpacity').value = config.categoriaBgOpacity;
+        document.getElementById('categoriaBgOpacityValue').textContent = config.categoriaBgOpacity;
+
+        // Colores título (similar)
+        document.getElementById('tituloTextColor').value = config.tituloTextColor;
+        if (document.getElementById('tituloTextColorPicker')) {
+            document.getElementById('tituloTextColorPicker').value = config.tituloTextColorPicker || '#ffffff';
+            document.getElementById('tituloTextColorPicker').style.display = config.tituloTextColor === 'custom' ? 'block' : 'none';
         }
 
-        body.dark {
-            background-color: var(--bg-dark);
-            color: var(--text-dark);
+        document.getElementById('tituloBgColor').value = config.tituloBgColor;
+        if (document.getElementById('tituloBgColorPicker')) {
+            document.getElementById('tituloBgColorPicker').value = config.tituloBgColorPicker || '#ffffff';
+            document.getElementById('tituloBgColorPicker').style.display = config.tituloBgColor === 'custom' ? 'block' : 'none';
+        }
+        document.getElementById('tituloBgOpacity').value = config.tituloBgOpacity;
+        document.getElementById('tituloBgOpacityValue').textContent = config.tituloBgOpacity;
+
+        updateCategoryStyle();
+        updateTitleStyle();
+        updateImageFX();
+        changeSize();
+    });
+
+    // Subir imagen local
+    document.getElementById('imageUpload')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file || !file.type.startsWith('image/')) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            localImageDataURL = ev.target.result;
+            if (currentImage && fabricCanvas) {
+                fabric.Image.fromURL(localImageDataURL, (img) => {
+                    fabricCanvas.remove(currentImage);
+                    currentImage = img;
+                    fabricCanvas.add(currentImage);
+                    currentImage.sendToBack();
+                    darknessOverlay?.bringToFront();
+                    categoriaRect?.bringToFront();
+                    categoriaTextbox?.bringToFront();
+                    tituloRect?.bringToFront();
+                    tituloTextbox?.bringToFront();
+                    logoObj?.bringToFront();
+                    adjustImageToCanvas();
+                    updateImageFX();
+                });
+            }
+        };
+        reader.readAsDataURL(file);
+    });
+
+    toggleColorPicker('categoriaTextColor', 'categoriaTextColorPicker');
+    toggleColorPicker('categoriaBgColor', 'categoriaBgColorPicker');
+    toggleColorPicker('tituloTextColor', 'tituloTextColorPicker');
+    toggleColorPicker('tituloBgColor', 'tituloBgColorPicker');
+
+    fabricCanvas?.on('object:moving', (e) => checkCenterWhileDragging(e.target));
+    fabricCanvas?.on('object:scaling', (e) => checkCenterWhileDragging(e.target));
+    fabricCanvas?.on('mouse:up', removeCenterLines);
+
+    updateTemplateSelect();
+});
+
+// ──────────────────────────────────────────────────────────────
+// FUNCIONES AUXILIARES
+// ──────────────────────────────────────────────────────────────
+
+function loadFont(fontFamily, fontPath) {
+    return new Promise((resolve, reject) => {
+        const font = new FontFace(fontFamily, `url(${baseURL}${fontPath})`);
+        document.fonts.add(font);
+        font.load().then(resolve).catch(reject);
+    });
+}
+
+function clearForm() {
+    ['urlInput', 'imageUpload', 'templateName', 'loadTemplate'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    ['sizeSelect'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '1080x1080';
+    });
+
+    ['blurRange', 'opacityRange', 'categoriaBgOpacity', 'tituloBgOpacity'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.value = id.includes('blur') || id.includes('opacity') ? '0' : '0.5';
+            document.getElementById(id.replace('Range','Value') || id.replace('Opacity','OpacityValue')).textContent = el.value;
+        }
+    });
+
+    ['categoriaTextColor', 'tituloTextColor'].forEach(id => {
+        document.getElementById(id).value = '#a6ce39';
+    });
+
+    ['categoriaBgColor', 'tituloBgColor'].forEach(id => {
+        document.getElementById(id).value = id.includes('categoria') ? '#a6ce39' : '#8fb82d';
+    });
+
+    ['categoriaTextColorPicker', 'categoriaBgColorPicker', 'tituloTextColorPicker', 'tituloBgColorPicker']
+        .forEach(id => document.getElementById(id).style.display = 'none');
+
+    fabricCanvas?.clear();
+    currentImage = tituloTextbox = categoriaTextbox = tituloRect = categoriaRect = logoObj = 
+    currentNewsData = darknessOverlay = currentImageDataURL = localImageDataURL = null;
+
+    fabricCanvas?.setDimensions({ width: 1080, height: 1080 });
+    if (canvasContainer) {
+        canvasContainer.style.width = '1080px';
+        canvasContainer.style.height = '1080px';
+    }
+
+    updateExportButtonPosition();
+    fabricCanvas?.renderAll();
+}
+
+function updateTemplateSelect() {
+    const select = document.getElementById('loadTemplate');
+    if (!select) return;
+    select.innerHTML = '<option value="">Seleccionar Plantilla</option>';
+    const templates = JSON.parse(localStorage.getItem('templates') || '{}');
+    Object.keys(templates).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+}
+
+// ──────────────────────────────────────────────────────────────
+// Centrado visual (líneas guía)
+// ──────────────────────────────────────────────────────────────
+
+function drawCenterLines() {
+    removeCenterLines();
+    const w = fabricCanvas.width, h = fabricCanvas.height;
+    centerLines.v = new fabric.Line([w/2, 0, w/2, h], {stroke: '#00bfff', strokeWidth: 4, selectable: false, evented: false, opacity: 0.7});
+    centerLines.h = new fabric.Line([0, h/2, w, h/2], {stroke: '#00bfff', strokeWidth: 4, selectable: false, evented: false, opacity: 0.7});
+    fabricCanvas.add(centerLines.v, centerLines.h);
+    centerLines.v.bringToFront();
+    centerLines.h.bringToFront();
+    fabricCanvas.renderAll();
+}
+
+function removeCenterLines() {
+    if (centerLines.h) fabricCanvas.remove(centerLines.h);
+    if (centerLines.v) fabricCanvas.remove(centerLines.v);
+    centerLines = { h: null, v: null };
+}
+
+function checkCenterWhileDragging(obj) {
+    const cx = fabricCanvas.width / 2;
+    const cy = fabricCanvas.height / 2;
+    const c = obj.getCenterPoint();
+    const thr = 10;
+
+    const h = Math.abs(c.x - cx) < thr;
+    const v = Math.abs(c.y - cy) < thr;
+
+    if (h && v) {
+        if (!centerLines.v || !centerLines.h) drawCenterLines();
+    } else if (h) {
+        if (!centerLines.v) drawCenterLines();
+        if (centerLines.h) { fabricCanvas.remove(centerLines.h); centerLines.h = null; }
+    } else if (v) {
+        if (!centerLines.h) drawCenterLines();
+        if (centerLines.v) { fabricCanvas.remove(centerLines.v); centerLines.v = null; }
+    } else {
+        removeCenterLines();
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Texto + fondo rectángulo sincronizado
+// ──────────────────────────────────────────────────────────────
+
+function syncRectToText(rect, textbox) {
+    if (!rect || !textbox) return;
+    const tw = textbox.width * textbox.scaleX;
+    const th = textbox.height * textbox.scaleY;
+    const pw = tw + textbox.padding * 2;
+    const ph = th + textbox.padding * 2;
+
+    rect.set({
+        left: textbox.left,
+        top: textbox.top,
+        width: pw,
+        height: ph,
+        originX: textbox.originX,
+        originY: textbox.originY
+    });
+    rect.setCoords();
+    fabricCanvas.renderAll();
+}
+
+function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
+    const rect = new fabric.Rect({
+        fill: bgColor === 'custom' ? document.getElementById(`${opts.id}BgColorPicker`)?.value : bgColor,
+        opacity: parseFloat(bgOpacity),
+        selectable: false,
+        evented: false,
+        rx: 4, ry: 4,
+        left: opts.left,
+        top: opts.top,
+        originX: opts.originX || 'left',
+        originY: opts.originY || 'top'
+    });
+
+    const textbox = new fabric.Textbox(text, {
+        ...opts,
+        fill: textColor === 'custom' ? document.getElementById(`${opts.id}TextColorPicker`)?.value : textColor,
+        selectable: true,
+        hasControls: true,
+        hasBorders: true,
+        padding: 6
+    });
+
+    fabricCanvas.add(rect);
+    fabricCanvas.add(textbox);
+    textbox.bringToFront();
+    syncRectToText(rect, textbox);
+
+    ['moving','scaling','changed','rotated'].forEach(event => {
+        textbox.on(event, () => syncRectToText(rect, textbox));
+    });
+
+    return { textbox, rect };
+}
+
+// ──────────────────────────────────────────────────────────────
+// Efectos imagen (blur + overlay oscuridad)
+// ──────────────────────────────────────────────────────────────
+
+function updateImageFX() {
+    if (!currentImage) return;
+
+    const blurVal = parseFloat(document.getElementById('blurRange')?.value || 0) / 1000;
+    const darkOpacity = parseFloat(document.getElementById('opacityRange')?.value || 0);
+
+    currentImage.filters = blurVal > 0 ? [new fabric.Image.filters.Blur({ blur: blurVal })] : [];
+    currentImage.applyFilters();
+
+    if (darknessOverlay) darknessOverlay.set({ opacity: darkOpacity });
+
+    fabricCanvas.renderAll();
+
+    // Detectar si la imagen se volvió gris (fallback a original)
+    const ctx = fabricCanvas.getContext();
+    const data = ctx.getImageData(0, 0, fabricCanvas.width, fabricCanvas.height).data;
+    let isGray = true;
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i] !== data[i+1] || data[i] !== data[i+2]) {
+            isGray = false;
+            break;
+        }
+    }
+    if (isGray && currentImageDataURL) {
+        fabric.Image.fromURL(currentImageDataURL, img => {
+            fabricCanvas.remove(currentImage);
+            currentImage = img;
+            fabricCanvas.add(currentImage);
+            currentImage.sendToBack();
+            darknessOverlay?.bringToFront();
+            categoriaRect?.bringToFront();
+            categoriaTextbox?.bringToFront();
+            tituloRect?.bringToFront();
+            tituloTextbox?.bringToFront();
+            logoObj?.bringToFront();
+            adjustImageToCanvas();
+            updateImageFX();
+        });
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Actualizar estilos de texto/fondo
+// ──────────────────────────────────────────────────────────────
+
+function updateCategoryStyle() {
+    if (!categoriaRect || !categoriaTextbox) return;
+    const bg = document.getElementById('categoriaBgColor')?.value;
+    const txt = document.getElementById('categoriaTextColor')?.value;
+    const op = parseFloat(document.getElementById('categoriaBgOpacity')?.value || 0.5);
+
+    categoriaRect.set({
+        fill: bg === 'custom' ? document.getElementById('categoriaBgColorPicker')?.value : bg,
+        opacity: op
+    });
+    categoriaTextbox.set({
+        fill: txt === 'custom' ? document.getElementById('categoriaTextColorPicker')?.value : txt
+    });
+    fabricCanvas.renderAll();
+}
+
+function updateTitleStyle() {
+    if (!tituloRect || !tituloTextbox) return;
+    const bg = document.getElementById('tituloBgColor')?.value;
+    const txt = document.getElementById('tituloTextColor')?.value;
+    const op = parseFloat(document.getElementById('tituloBgOpacity')?.value || 0.5);
+
+    tituloRect.set({
+        fill: bg === 'custom' ? document.getElementById('tituloBgColorPicker')?.value : bg,
+        opacity: op
+    });
+    tituloTextbox.set({
+        fill: txt === 'custom' ? document.getElementById('tituloTextColorPicker')?.value : txt
+    });
+    fabricCanvas.renderAll();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Toggle color picker personalizado
+// ──────────────────────────────────────────────────────────────
+
+function toggleColorPicker(selectId, pickerId) {
+    const select = document.getElementById(selectId);
+    const picker = document.getElementById(pickerId);
+    if (!select || !picker) return;
+
+    select.addEventListener('change', () => {
+        picker.style.display = select.value === 'custom' ? 'block' : 'none';
+        if (select.value === 'custom') {
+            picker.value = '#ffffff';
+            if (selectId.includes('categoria')) updateCategoryStyle();
+            if (selectId.includes('titulo')) updateTitleStyle();
+        }
+    });
+}
+
+function handleCategoriaTextColorChange() { toggleColorPicker('categoriaTextColor', 'categoriaTextColorPicker'); updateCategoryStyle(); }
+function handleCategoriaBgColorChange()   { toggleColorPicker('categoriaBgColor', 'categoriaBgColorPicker');   updateCategoryStyle(); }
+function handleTituloTextColorChange()    { toggleColorPicker('tituloTextColor', 'tituloTextColorPicker');    updateTitleStyle(); }
+function handleTituloBgColorChange()      { toggleColorPicker('tituloBgColor', 'tituloBgColorPicker');        updateTitleStyle(); }
+
+// ──────────────────────────────────────────────────────────────
+// Ajustar imagen al canvas (cover)
+// ──────────────────────────────────────────────────────────────
+
+function adjustImageToCanvas() {
+    if (!currentImage || !fabricCanvas) return;
+
+    const cw = fabricCanvas.width, ch = fabricCanvas.height;
+    const { width: iw, height: ih } = currentImage.getOriginalSize();
+    const scale = Math.max(cw / iw, ch / ih);
+
+    currentImage.set({
+        scaleX: scale,
+        scaleY: scale,
+        left: cw / 2,
+        top: ch / 2,
+        originX: 'center',
+        originY: 'center'
+    });
+
+    fabricCanvas.renderAll();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Redimensionar todo al cambiar tamaño
+// ──────────────────────────────────────────────────────────────
+
+function resizeAllObjects(w, h) {
+    fabricCanvas.setDimensions({ width: w, height: h });
+    if (canvasContainer) {
+        canvasContainer.style.width = w + 'px';
+        canvasContainer.style.height = h + 'px';
+    }
+
+    if (darknessOverlay) {
+        darknessOverlay.set({ width: w, height: h });
+    }
+
+    if (currentImage) adjustImageToCanvas();
+
+    if (currentNewsData) {
+        // Remover objetos viejos
+        [categoriaRect, categoriaTextbox, tituloRect, tituloTextbox, logoObj]
+            .forEach(obj => obj && fabricCanvas.remove(obj));
+
+        addTextAndLogoToCanvas(currentNewsData, w, h);
+
+        // Restaurar colores/opacidad
+        if (categoriaRect && categoriaTextbox) {
+            categoriaRect.set({ opacity: parseFloat(document.getElementById('categoriaBgOpacity')?.value || 0.5) });
+            categoriaTextbox.set({ fill: document.getElementById('categoriaTextColor')?.value });
+        }
+        if (tituloRect && tituloTextbox) {
+            tituloRect.set({ opacity: parseFloat(document.getElementById('tituloBgOpacity')?.value || 0.5) });
+            tituloTextbox.set({ fill: document.getElementById('tituloTextColor')?.value });
+        }
+    }
+
+    fabricCanvas.renderAll();
+}
+
+function updateExportButtonPosition() {
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (wrapper) wrapper.style.height = (fabricCanvas.height * 0.5) + 'px';
+}
+
+// ──────────────────────────────────────────────────────────────
+// GENERAR PREVIEW (parte crítica)
+// ──────────────────────────────────────────────────────────────
+
+async function generatePreview() {
+    const urlInput = document.getElementById('urlInput');
+    if (!urlInput?.value.trim()) {
+        alert('Ingresa una URL válida');
+        return;
+    }
+
+    try {
+        const extractRes = await fetch(`${baseURL}/api/extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: urlInput.value.trim() })
+        });
+
+        if (!extractRes.ok) throw new Error(`Extract error: ${extractRes.status}`);
+
+        const data = await extractRes.json();
+        if (data.error) throw new Error(data.error);
+
+        currentNewsData = data;
+
+        let imageSrc = localImageDataURL;
+        if (!imageSrc) {
+            const processRes = await fetch(`${baseURL}/api/process-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (!processRes.ok) throw new Error(`Process image error: ${processRes.status}`);
+
+            const { image_base64 } = await processRes.json();
+            imageSrc = `data:image/jpeg;base64,${image_base64}`;
+            currentImageDataURL = imageSrc;
         }
 
-        body.dark #controls {
-            background-color: var(--control-bg-dark);
-        }
+        fabricCanvas.clear();
+        document.getElementById('opacityRange').value = '0';
+        document.getElementById('opacityValue').textContent = '0';
 
-        #app-container {
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            gap: 30px;
-            padding: 20px;
-            flex-wrap: wrap;
-        }
+        fabric.Image.fromURL(imageSrc, (img) => {
+            currentImage = img;
 
-        #canvas-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            max-width: 600px;
-        }
+            darknessOverlay = new fabric.Rect({
+                left: 0, top: 0,
+                width: fabricCanvas.width,
+                height: fabricCanvas.height,
+                fill: 'black',
+                opacity: 0,
+                selectable: false,
+                evented: false
+            });
 
-        .logo-wrapper {
-            position: relative;
-            display: inline-block;
-            background: rgba(143, 184, 45, 0.7);
-            border-radius: 8px;
-            padding: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            border: 3px solid white;
-        }
+            fabricCanvas.add(currentImage);
+            fabricCanvas.add(darknessOverlay);
+            currentImage.sendToBack();
 
-        #canvas-section img.logo {
-            width: 200px;
-            margin-bottom: 10px;
-            filter: brightness(1.2);
-        }
+            adjustImageToCanvas();
+            addTextAndLogoToCanvas(data, fabricCanvas.width, fabricCanvas.height);
+            fabricCanvas.renderAll();
+            updateExportButtonPosition();
+        }, { crossOrigin: 'anonymous' });
 
-        #canvas-wrapper {
-            position: relative;
-            display: inline-block;
-            height: auto;
-        }
+    } catch (err) {
+        console.error("Error en generatePreview:", err);
+        alert(`Error al generar preview:\n${err.message}`);
+    }
+}
 
-        #canvas-container {
-            position: relative;
-            border: 1px solid #ccc;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            background-color: white;
-            transform: scale(0.5);
-            transform-origin: top center;
-            transition: filter 0.3s ease;
-        }
+// ──────────────────────────────────────────────────────────────
+// Agregar texto y logo al canvas
+// ──────────────────────────────────────────────────────────────
 
-        #exportButton {
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 2px;
-            background-color: var(--verde-mm);
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            z-index: 5;
-        }
+function addTextAndLogoToCanvas(data, width, height) {
+    if (!data) return;
 
-        #exportButton:hover {
-            background-color: var(--verde-osc);
-        }
+    const catClean = data.categoria?.replace(/_/g, ' ') || 'NOTICIAS';
+    const categoria = catClean
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
 
-        #controls {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            width: 100%;
-            max-width: 400px;
-            padding: 20px;
-            background-color: var(--control-bg-light);
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            position: relative;
-            z-index: 10;
-        }
+    const cat = createTextWithRect(categoria, {
+        id: 'categoria',
+        left: width / 2,
+        top: height * 0.05,
+        fontFamily: 'Economica-Regular',
+        fontSize: 66,
+        textAlign: 'center',
+        width: 550,
+        originX: 'center',
+        originY: 'top'
+    }, document.getElementById('categoriaBgColor')?.value, 
+       document.getElementById('categoriaBgOpacity')?.value, 
+       document.getElementById('categoriaTextColor')?.value);
 
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
+    categoriaTextbox = cat.textbox;
+    categoriaRect = cat.rect;
+    syncRectToText(categoriaRect, categoriaTextbox);
 
-        label {
-            font-weight: bold;
-        }
+    const tit = createTextWithRect(data.titulo || 'Sin título', {
+        id: 'titulo',
+        left: width / 2,
+        top: height / 2,
+        width: width * 0.8,
+        fontFamily: 'Bebasneue-regular',
+        fontSize: 70,
+        textAlign: 'center',
+        originX: 'center',
+        originY: 'center'
+    }, document.getElementById('tituloBgColor')?.value, 
+       document.getElementById('tituloBgOpacity')?.value, 
+       document.getElementById('tituloTextColor')?.value);
 
-        input[type="range"] {
-            width: 100%;
-            -webkit-appearance: none;
-            height: 8px;
-            border-radius: 5px;
-            background: #d3d3d3;
-            outline: none;
-            opacity: 0.7;
-            transition: opacity 0.2s ease;
-        }
+    tituloTextbox = tit.textbox;
+    tituloRect = tit.rect;
+    syncRectToText(tituloRect, tituloTextbox);
 
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: var(--verde-mm);
-            cursor: pointer;
-        }
+    fabric.Image.fromURL(`${baseURL}/static/logo.png`, (logo) => {
+        if (!logo) return;
+        logo.set({
+            left: width / 2,
+            top: height * 0.9,
+            scaleX: 330 / logo.width,
+            scaleY: 79 / logo.height,
+            selectable: true,
+            hasControls: true,
+            hasBorders: false,
+            originX: 'center',
+            originY: 'center',
+            shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
+        });
+        fabricCanvas.add(logo);
+        logoObj = logo;
+        logo.bringToFront();
+        fabricCanvas.renderAll();
+    }, { crossOrigin: 'anonymous' });
+}
 
-        input[type="range"]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: var(--verde-mm);
-            cursor: pointer;
-        }
+// ──────────────────────────────────────────────────────────────
+// Cambiar tamaño canvas
+// ──────────────────────────────────────────────────────────────
 
-        button, input[type="text"], select, input[type="color"], input[type="file"] {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-family: 'Montserrat-Regular', Arial, sans-serif;
-            font-size: 1em;
-            transition: background-color 0.3s ease, border-color 0.3s ease;
-        }
+function changeSize() {
+    const val = document.getElementById('sizeSelect')?.value;
+    if (!val) return;
+    const [w, h] = val.split('x').map(Number);
+    resizeAllObjects(w, h);
+    updateExportButtonPosition();
+}
 
-        button {
-            background-color: var(--verde-mm);
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
+// ──────────────────────────────────────────────────────────────
+// Exportar imagen final
+// ──────────────────────────────────────────────────────────────
 
-        button:hover {
-            background-color: var(--verde-osc);
-        }
+function exportImage() {
+    if (!fabricCanvas) return;
 
-        .color-picker {
-            display: none;
-            margin-top: 5px;
-        }
+    const blurVal = parseFloat(document.getElementById('blurRange')?.value || 0);
+    if (blurVal > 0) {
+        currentImage.filters = [new fabric.Image.filters.Blur({ blur: blurVal / 1000 })];
+        currentImage.applyFilters();
+        fabricCanvas.renderAll();
+    }
 
-        .fabric-canvas-wrapper {
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-        }
+    const dataURL = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
 
-        .value-display {
-            font-size: 0.9em;
-            margin-left: 10px;
-        }
-    </style>
-</head>
-<body class="light">
-    <div id="app-container">
-        <div id="canvas-section">
-            <div class="logo-wrapper">
-                <img src="/static/logo.png" alt="Logo" class="logo">
-            </div>
-            <h1>Generador de Previews</h1>
-            <div id="canvas-wrapper">
-                <div id="canvas-container">
-                    <canvas id="canvas"></canvas>
-                </div>
-                <button id="exportButton" onclick="exportImage()">Exportar Imagen</button>
-            </div>
-        </div>
-        <div id="controls">
-            <div class="control-group">
-                <label for="urlInput">URL de la noticia:</label>
-                <input type="text" id="urlInput" placeholder="https://ejemplo.com/noticia">
-            </div>
-            <div class="control-group">
-                <label for="imageUpload">Imagen de portada (opcional):</label>
-                <input type="file" id="imageUpload" accept="image/*">
-            </div>
-            <div class="control-group">
-                <label for="themeToggle">Tema:</label>
-                <select id="themeToggle">
-                    <option value="light" selected>Claro</option>
-                    <option value="dark">Oscuro</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="sizeSelect">Tamaño:</label>
-                <select id="sizeSelect">
-                    <option value="1080x1080">Cuadrado (Instagram Post)</option>
-                    <option value="1080x1350">Instagram Portrait</option>
-                    <option value="1080x1920">Instagram Historia</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="blurRange">Desenfoque de la imagen: <span id="blurValue" class="value-display">0</span></label>
-                <input type="range" id="blurRange" min="0" max="100" value="0">
-            </div>
-            <div class="control-group">
-                <label for="opacityRange">Opacidad del fondo: <span id="opacityValue" class="value-display">0</span></label>
-                <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0">
-            </div>
-            <div class="control-group">
-                <label for="categoriaTextColor">Color del texto de la categoría:</label>
-                <select id="categoriaTextColor">
-                    <option value="#ffffff">Blanco</option>
-                    <option value="#000000">Negro</option>
-                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
-                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
-                    <option value="custom">Personalizado</option>
-                </select>
-                <input type="color" id="categoriaTextColorPicker" class="color-picker">
-            </div>
-            <div class="control-group">
-                <label for="categoriaBgColor">Color de fondo de la categoría:</label>
-                <select id="categoriaBgColor">
-                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
-                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
-                    <option value="#ffffff">Blanco</option>
-                    <option value="#000000">Negro</option>
-                    <option value="custom">Personalizado</option>
-                </select>
-                <input type="color" id="categoriaBgColorPicker" class="color-picker">
-            </div>
-            <div class="control-group">
-                <label for="categoriaBgOpacity">Opacidad del fondo de la categoría: <span id="categoriaBgOpacityValue" class="value-display">0.5</span></label>
-                <input type="range" id="categoriaBgOpacity" min="0" max="1" step="0.05" value="0.5">
-            </div>
-            <div class="control-group">
-                <label for="tituloTextColor">Color del texto del título:</label>
-                <select id="tituloTextColor">
-                    <option value="#ffffff">Blanco</option>
-                    <option value="#000000">Negro</option>
-                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
-                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
-                    <option value="custom">Personalizado</option>
-                </select>
-                <input type="color" id="tituloTextColorPicker" class="color-picker">
-            </div>
-            <div class="control-group">
-                <label for="tituloBgColor">Color de fondo del título:</label>
-                <select id="tituloBgColor">
-                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
-                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
-                    <option value="#ffffff">Blanco</option>
-                    <option value="#000000">Negro</option>
-                    <option value="custom">Personalizado</option>
-                </select>
-                <input type="color" id="tituloBgColorPicker" class="color-picker">
-            </div>
-            <div class="control-group">
-                <label for="tituloBgOpacity">Opacidad del fondo del título: <span id="tituloBgOpacityValue" class="value-display">0.5</span></label>
-                <input type="range" id="tituloBgOpacity" min="0" max="1" step="0.05" value="0.5">
-            </div>
-            <div class="control-group">
-                <label for="templateName">Nombre de la plantilla:</label>
-                <input type="text" id="templateName" placeholder="Ej. Instagram Story">
-                <button id="saveTemplate">Guardar Plantilla</button>
-                <select id="loadTemplate">
-                    <option value="">Seleccionar Plantilla</option>
-                </select>
-            </div>
-            <button id="generateButton">Generar Preview</button>
-            <button id="clearButton">Limpiar</button>
-        </div>
-    </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    <script src="/static/script.js"></script>
-</body>
-</html>
+    // Restaurar imagen sin blur (opcional)
+    if (blurVal > 0 && currentImageDataURL) {
+        fabric.Image.fromURL(currentImageDataURL, (img) => {
+            fabricCanvas.remove(currentImage);
+            currentImage = img;
+            fabricCanvas.add(currentImage);
+            currentImage.sendToBack();
+            darknessOverlay?.bringToFront();
+            categoriaRect?.bringToFront();
+            categoriaTextbox?.bringToFront();
+            tituloRect?.bringToFront();
+            tituloTextbox?.bringToFront();
+            logoObj?.bringToFront();
+            adjustImageToCanvas();
+            updateImageFX();
+        });
+    }
+
+    const link = document.createElement('a');
+    link.download = 'preview-noticia.png';
+    link.href = dataURL;
+    link.click();
+}
