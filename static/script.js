@@ -1,341 +1,309 @@
-// Variables globales
-let fabricCanvas = null;
-let currentImage = null;
-let canvasContainer = null;
-let tituloTextbox = null;
-let categoriaTextbox = null;
-let tituloRect = null;
-let categoriaRect = null;
-let centerLines = { h: null, v: null };
-let logoObj = null;
-let emojiObj = null;
-let currentNewsData = null;
-let darknessOverlay = null;
-let localImageDataURL = null;
-
-// Variables para modo manual
-let dateText = null;
-let headerText = null;
-let bodyText = null;
-
-// ---------- INICIALIZACIÓN ----------
-document.addEventListener('DOMContentLoaded', async () => {
-    const canvasEl = document.getElementById('canvas');
-    fabricCanvas = new fabric.Canvas(canvasEl, {
-        width: 1080,
-        height: 1080,
-        preserveObjectStacking: true,
-        selection: true,
-        backgroundColor: '#1a1a1a'
-    });
-    
-    canvasContainer = document.getElementById('canvas-container');
-    if (canvasContainer) {
-        canvasContainer.style.width = `${fabricCanvas.width}px`;
-        canvasContainer.style.height = `${fabricCanvas.height}px`;
-    }
-
-    fabric.Object.prototype.set({
-        borderColor: '#8fb82d',
-        cornerColor: '#8fb82d',
-        cornerSize: 12,
-        borderScaleFactor: 2,
-        transparentCorners: false
-    });
-
-    // CARGA DE FUENTES (Case Sensitive para Render/Linux)
-    try {
-        await Promise.all([
-            loadFont('Economica-Regular', '/static/fonts/Economica-Regular.ttf'),
-            loadFont('BebasNeue-Regular', '/static/fonts/BebasNeue-Regular.ttf'),
-            loadFont('Montserrat-Regular', '/static/fonts/Montserrat-Regular.ttf')
-        ]);
-        console.log("Fuentes cargadas correctamente.");
-    } catch (err) {
-        console.error("Error cargando fuentes:", err);
-    }
-
-    // --- EVENT LISTENERS ---
-    setupEventListeners();
-    toggleMode();
-});
-
-function setupEventListeners() {
-    document.getElementById('blurRange').addEventListener('input', () => {
-        document.getElementById('blurValue').textContent = document.getElementById('blurRange').value;
-        updateImageFX();
-    });
-    document.getElementById('opacityRange').addEventListener('input', () => {
-        document.getElementById('opacityValue').textContent = document.getElementById('opacityRange').value;
-        updateImageFX();
-    });
-    
-    document.getElementById('categoriaTextColor').addEventListener('change', updateCategoryStyle);
-    document.getElementById('categoriaBgColor').addEventListener('change', updateCategoryStyle);
-    document.getElementById('categoriaBgOpacity').addEventListener('input', () => {
-        document.getElementById('categoriaBgOpacityValue').textContent = document.getElementById('categoriaBgOpacity').value;
-        updateCategoryStyle();
-    });
-    
-    document.getElementById('tituloTextColor').addEventListener('change', updateTitleStyle);
-    document.getElementById('tituloBgColor').addEventListener('change', updateTitleStyle);
-    document.getElementById('tituloBgOpacity').addEventListener('input', () => {
-        document.getElementById('tituloBgOpacityValue').textContent = document.getElementById('tituloBgOpacity').value;
-        updateTitleStyle();
-    });
-
-    document.getElementById('categoriaTextColorPicker').addEventListener('input', updateCategoryStyle);
-    document.getElementById('categoriaBgColorPicker').addEventListener('input', updateCategoryStyle);
-    document.getElementById('tituloTextColorPicker').addEventListener('input', updateTitleStyle);
-    document.getElementById('tituloBgColorPicker').addEventListener('input', updateTitleStyle);
-
-    document.getElementById('clearButton').addEventListener('click', clearForm);
-    document.getElementById('generateButton').addEventListener('click', generatePreview);
-    document.getElementById('sizeSelect').addEventListener('change', changeSize);
-    document.getElementById('modeSelect').addEventListener('change', toggleMode);
-
-    // Carga de imagen local
-    document.getElementById('imageUpload').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (f) => {
-                localImageDataURL = f.target.result;
-                if (currentImage) fabricCanvas.remove(currentImage);
-                fabric.Image.fromURL(localImageDataURL, img => {
-                    currentImage = img;
-                    fabricCanvas.add(currentImage);
-                    currentImage.sendToBack();
-                    adjustImageToCanvas();
-                }, { crossOrigin: 'anonymous' });
-            };
-            reader.readAsDataURL(file);
+<!-- index.html con modificaciones para funcionamiento online -->
+<!-- No se requieren cambios significativos en este archivo, ya que las rutas son relativas y el script se carga desde /static/script.js. -->
+<!-- Si el frontend está separado (ej: GitHub Pages), ajusta el <script src> a una URL absoluta si es necesario, pero asumiendo despliegue integrado en Render, está bien. -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Previews</title>
+    <style>
+        :root {
+            --verde-mm: #a6ce39;
+            --verde-osc: #8fb82d;
+            --verde-cl: #f5f9e8;
+            --bg-light: #f5f9e8;
+            --bg-dark: #333;
+            --text-light: #333;
+            --text-dark: #fff;
+            --control-bg-light: #fff;
+            --control-bg-dark: #444;
         }
-    });
 
-    toggleColorPicker('categoriaTextColor', 'categoriaTextColorPicker');
-    toggleColorPicker('categoriaBgColor', 'categoriaBgColorPicker');
-    toggleColorPicker('tituloTextColor', 'tituloTextColorPicker');
-    toggleColorPicker('tituloBgColor', 'tituloBgColorPicker');
-
-    fabricCanvas.on('object:moving', (e) => checkCenterWhileDragging(e.target));
-    fabricCanvas.on('mouse:up', () => removeCenterLines());
-}
-
-// ---------- FUNCIONES DE APOYO ----------
-function loadFont(name, url) {
-    const f = new FontFace(name, `url(${url})`);
-    return f.load().then(loaded => document.fonts.add(loaded));
-}
-
-function toggleMode() {
-    const isLink = document.getElementById('modeSelect').value === 'link';
-    document.getElementById('linkInput').style.display = isLink ? 'block' : 'none';
-    document.getElementById('manualInputs').style.display = isLink ? 'none' : 'block';
-}
-
-function getCurrentDateTime() {
-    const now = new Date();
-    return `DÍA: ${now.toLocaleDateString()} HORA: ${now.getHours()}:${now.getMinutes()}`;
-}
-
-function clearForm() {
-    fabricCanvas.clear();
-    currentImage = null;
-    localImageDataURL = null;
-    document.getElementById('urlInput').value = '';
-    fabricCanvas.renderAll();
-}
-
-// ---------- LÓGICA DE FABRIC JS ----------
-function syncRectToText(rect, textbox) {
-    if (!rect || !textbox) return;
-    rect.set({
-        left: textbox.left, top: textbox.top,
-        width: (textbox.width * textbox.scaleX) + (textbox.padding * 2),
-        height: (textbox.height * textbox.scaleY) + (textbox.padding * 2),
-        originX: textbox.originX, originY: textbox.originY, angle: textbox.angle
-    });
-    rect.setCoords();
-}
-
-function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
-    const rect = new fabric.Rect({
-        fill: bgColor === 'custom' ? document.getElementById(`${opts.id}BgColorPicker`).value : bgColor,
-        opacity: parseFloat(bgOpacity), selectable: false, evented: false, rx: 8, ry: 8
-    });
-    const textbox = new fabric.Textbox(text, {
-        ...opts, fill: textColor === 'custom' ? document.getElementById(`${opts.id}TextColorPicker`).value : textColor,
-        padding: 20
-    });
-    fabricCanvas.add(rect, textbox);
-    textbox.on('moving', () => syncRectToText(rect, textbox));
-    textbox.on('scaling', () => syncRectToText(rect, textbox));
-    syncRectToText(rect, textbox);
-    return { textbox, rect };
-}
-
-function updateCategoryStyle() {
-    if (!categoriaRect) return;
-    const bg = document.getElementById('categoriaBgColor').value;
-    const tc = document.getElementById('categoriaTextColor').value;
-    categoriaRect.set({ 
-        fill: bg === 'custom' ? document.getElementById('categoriaBgColorPicker').value : bg,
-        opacity: parseFloat(document.getElementById('categoriaBgOpacity').value)
-    });
-    categoriaTextbox.set({ fill: tc === 'custom' ? document.getElementById('categoriaTextColorPicker').value : tc });
-    fabricCanvas.renderAll();
-}
-
-function updateTitleStyle() {
-    if (!tituloRect) return;
-    const bg = document.getElementById('tituloBgColor').value;
-    const tc = document.getElementById('tituloTextColor').value;
-    tituloRect.set({ 
-        fill: bg === 'custom' ? document.getElementById('tituloBgColorPicker').value : bg,
-        opacity: parseFloat(document.getElementById('tituloBgOpacity').value)
-    });
-    tituloTextbox.set({ fill: tc === 'custom' ? document.getElementById('tituloTextColorPicker').value : tc });
-    fabricCanvas.renderAll();
-}
-
-function toggleColorPicker(sId, pId) {
-    const s = document.getElementById(sId), p = document.getElementById(pId);
-    s.addEventListener('change', () => p.style.display = s.value === 'custom' ? 'inline-block' : 'none');
-}
-
-// ---------- GENERACIÓN ----------
-async function generatePreview() {
-    const btn = document.getElementById('generateButton');
-    const mode = document.getElementById('modeSelect').value;
-    btn.disabled = true; btn.innerText = "Procesando...";
-
-    if (mode === 'link') {
-        const url = document.getElementById('urlInput').value;
-        try {
-            // 1. Extraer datos
-            const res = await fetch('/api/extract', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            currentNewsData = data;
-
-            // 2. Procesar imagen (enviamos imagen_url al nuevo app.py)
-            let imgDataURL = localImageDataURL;
-            if (!imgDataURL) {
-                const imgRes = await fetch('/api/process-image', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ imagen_url: data.imagen_url })
-                });
-                const imgJson = await imgRes.json();
-                imgDataURL = `data:image/jpeg;base64,${imgJson.image_base64}`;
-            }
-
-            // 3. Dibujar en Canvas
-            fabric.Image.fromURL(imgDataURL, img => {
-                fabricCanvas.clear();
-                currentImage = img;
-                darknessOverlay = new fabric.Rect({
-                    width: fabricCanvas.width, height: fabricCanvas.height, fill: 'black',
-                    opacity: parseFloat(document.getElementById('opacityRange').value), selectable: false
-                });
-                
-                fabricCanvas.add(currentImage, darknessOverlay);
-                currentImage.sendToBack();
-                adjustImageToCanvas();
-                updateImageFX();
-                
-                // Añadir textos al final para que estén arriba
-                addTextAndLogoToCanvas(data, fabricCanvas.width, fabricCanvas.height);
-                
-                btn.disabled = false; btn.innerText = "Generar Preview";
-            }, { crossOrigin: 'anonymous' });
-
-        } catch (e) {
-            alert("Error: " + e.message);
-            btn.disabled = false; btn.innerText = "Generar Preview";
+        body {
+            font-family: 'Montserrat-Regular', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-light);
+            color: var(--text-light);
         }
-    } else {
-        generateManualPreview();
-        btn.disabled = false; btn.innerText = "Generar Preview";
-    }
-}
 
-function addTextAndLogoToCanvas(data, w, h) {
-    // Categoría con fuente Economica
-    const catTxt = data.categoria.toUpperCase().replace(/_/g, ' ');
-    const cat = createTextWithRect(catTxt, {
-        id: 'categoria', left: w / 2, top: h * 0.08,
-        fontFamily: 'Economica-Regular', fontSize: 55, originX: 'center', textAlign: 'center'
-    }, document.getElementById('categoriaBgColor').value, '0.8', '#ffffff');
-    categoriaTextbox = cat.textbox; categoriaRect = cat.rect;
+        body.dark {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
+        }
 
-    // Título con fuente BebasNeue
-    const tit = createTextWithRect(data.titulo, {
-        id: 'titulo', left: w / 2, top: h / 2, width: w * 0.85,
-        fontFamily: 'BebasNeue-Regular', fontSize: 85, originX: 'center', originY: 'center', textAlign: 'center'
-    }, document.getElementById('tituloBgColor').value, '0.8', '#ffffff');
-    tituloTextbox = tit.textbox; tituloRect = tit.rect;
+        body.dark #controls {
+            background-color: var(--control-bg-dark);
+        }
 
-    // Logo
-    const logoP = `/static/${document.getElementById('logoSelect').value}`;
-    fabric.Image.fromURL(logoP, img => {
-        img.set({ left: w / 2, top: h * 0.92, originX: 'center', scaleX: 0.5, scaleY: 0.5 });
-        fabricCanvas.add(img);
-        img.bringToFront();
-    }, { crossOrigin: 'anonymous' });
-}
+        #app-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 30px;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
 
-function adjustImageToCanvas() {
-    if (!currentImage) return;
-    const scale = Math.max(fabricCanvas.width / currentImage.width, fabricCanvas.height / currentImage.height);
-    currentImage.set({ scaleX: scale, scaleY: scale, left: fabricCanvas.width/2, top: fabricCanvas.height/2, originX: 'center', originY: 'center' });
-    fabricCanvas.renderAll();
-}
+        #canvas-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 600px;
+        }
 
-function updateImageFX() {
-    if (!currentImage) return;
-    const b = parseFloat(document.getElementById('blurRange').value);
-    currentImage.filters = b > 0 ? [new fabric.Image.filters.Blur({ blur: b / 100 })] : [];
-    currentImage.applyFilters();
-    if (darknessOverlay) darknessOverlay.set({ opacity: parseFloat(document.getElementById('opacityRange').value) });
-    fabricCanvas.renderAll();
-}
+        .logo-wrapper {
+            position: relative;
+            display: inline-block;
+            background: rgba(143, 184, 45, 0.7);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border: 3px solid white;
+        }
 
-function changeSize() {
-    const [w, h] = document.getElementById('sizeSelect').value.split('x').map(Number);
-    fabricCanvas.setDimensions({ width: w, height: h });
-    if (canvasContainer) { canvasContainer.style.width = `${w}px`; canvasContainer.style.height = `${h}px`; }
-    if (currentImage) adjustImageToCanvas();
-    if (darknessOverlay) darknessOverlay.set({ width: w, height: h });
-}
+        #canvas-section img.logo {
+            width: 200px;
+            margin-bottom: 10px;
+            filter: brightness(1.2);
+        }
 
-function exportImage() {
-    const dataURL = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
-    const link = document.createElement('a');
-    link.download = `noticia-${Date.now()}.png`;
-    link.href = dataURL;
-    link.click();
-}
+        #canvas-wrapper {
+            position: relative;
+            display: inline-block;
+            height: auto;
+        }
 
-// ---------- GUÍAS DE CENTRADO ----------
-function checkCenterWhileDragging(obj) {
-    const cx = fabricCanvas.width / 2, cy = fabricCanvas.height / 2, c = obj.getCenterPoint();
-    removeCenterLines();
-    if (Math.abs(c.x - cx) < 15) {
-        centerLines.v = new fabric.Line([cx, 0, cx, fabricCanvas.height], { stroke: '#00bfff', strokeWidth: 2, selectable: false });
-        fabricCanvas.add(centerLines.v);
-    }
-    if (Math.abs(c.y - cy) < 15) {
-        centerLines.h = new fabric.Line([0, cy, fabricCanvas.width, cy], { stroke: '#00bfff', strokeWidth: 2, selectable: false });
-        fabricCanvas.add(centerLines.h);
-    }
-}
+        #canvas-container {
+            position: relative;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: white;
+            transform: scale(0.5);
+            transform-origin: top center;
+            transition: filter 0.3s ease;
+        }
 
-function removeCenterLines() {
-    if (centerLines.v) fabricCanvas.remove(centerLines.v);
-    if (centerLines.h) fabricCanvas.remove(centerLines.h);
-    centerLines = { h: null, v: null };
-}
+        #exportButton {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 2px;
+            background-color: var(--verde-mm);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            z-index: 5;
+        }
+
+        #exportButton:hover {
+            background-color: var(--verde-osc);
+        }
+
+        #controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            background-color: var(--control-bg-light);
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 10;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--verde-mm);
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--verde-mm);
+            cursor: pointer;
+        }
+
+        button, input[type="text"], select, input[type="color"], input[type="file"] {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: 'Montserrat-Regular', Arial, sans-serif;
+            font-size: 1em;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        button {
+            background-color: var(--verde-mm);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: var(--verde-osc);
+        }
+
+        .color-picker {
+            display: none;
+            margin-top: 5px;
+        }
+
+        .fabric-canvas-wrapper {
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .value-display {
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body class="light">
+    <div id="app-container">
+        <div id="canvas-section">
+            <div class="logo-wrapper">
+                <img src="/static/logo.png" alt="Logo" class="logo">
+            </div>
+            <h1>Generador de Previews</h1>
+            <div id="canvas-wrapper">
+                <div id="canvas-container">
+                    <canvas id="canvas"></canvas>
+                </div>
+                <button id="exportButton" onclick="exportImage()">Exportar Imagen</button>
+            </div>
+        </div>
+        <div id="controls">
+            <div class="control-group">
+                <label for="urlInput">URL de la noticia:</label>
+                <input type="text" id="urlInput" placeholder="https://ejemplo.com/noticia">
+            </div>
+            <div class="control-group">
+                <label for="imageUpload">Imagen de portada (opcional):</label>
+                <input type="file" id="imageUpload" accept="image/*">
+            </div>
+            <div class="control-group">
+                <label for="themeToggle">Tema:</label>
+                <select id="themeToggle">
+                    <option value="light" selected>Claro</option>
+                    <option value="dark">Oscuro</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="sizeSelect">Tamaño:</label>
+                <select id="sizeSelect">
+                    <option value="1080x1080">Cuadrado (Instagram Post)</option>
+                    <option value="1080x1350">Instagram Portrait</option>
+                    <option value="1080x1920">Instagram Historia</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="blurRange">Desenfoque de la imagen: <span id="blurValue" class="value-display">0</span></label>
+                <input type="range" id="blurRange" min="0" max="100" value="0">
+            </div>
+            <div class="control-group">
+                <label for="opacityRange">Opacidad del fondo: <span id="opacityValue" class="value-display">0</span></label>
+                <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0">
+            </div>
+            <div class="control-group">
+                <label for="categoriaTextColor">Color del texto de la categoría:</label>
+                <select id="categoriaTextColor">
+                    <option value="#ffffff">Blanco</option>
+                    <option value="#000000">Negro</option>
+                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
+                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+                <input type="color" id="categoriaTextColorPicker" class="color-picker">
+            </div>
+            <div class="control-group">
+                <label for="categoriaBgColor">Color de fondo de la categoría:</label>
+                <select id="categoriaBgColor">
+                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
+                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
+                    <option value="#ffffff">Blanco</option>
+                    <option value="#000000">Negro</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+                <input type="color" id="categoriaBgColorPicker" class="color-picker">
+            </div>
+            <div class="control-group">
+                <label for="categoriaBgOpacity">Opacidad del fondo de la categoría: <span id="categoriaBgOpacityValue" class="value-display">0.5</span></label>
+                <input type="range" id="categoriaBgOpacity" min="0" max="1" step="0.05" value="0.5">
+            </div>
+            <div class="control-group">
+                <label for="tituloTextColor">Color del texto del título:</label>
+                <select id="tituloTextColor">
+                    <option value="#ffffff">Blanco</option>
+                    <option value="#000000">Negro</option>
+                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
+                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+                <input type="color" id="tituloTextColorPicker" class="color-picker">
+            </div>
+            <div class="control-group">
+                <label for="tituloBgColor">Color de fondo del título:</label>
+                <select id="tituloBgColor">
+                    <option value="#8fb82d">Verde Oscuro (Corporativo)</option>
+                    <option value="#a6ce39" selected>Verde Claro (Corporativo)</option>
+                    <option value="#ffffff">Blanco</option>
+                    <option value="#000000">Negro</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+                <input type="color" id="tituloBgColorPicker" class="color-picker">
+            </div>
+            <div class="control-group">
+                <label for="tituloBgOpacity">Opacidad del fondo del título: <span id="tituloBgOpacityValue" class="value-display">0.5</span></label>
+                <input type="range" id="tituloBgOpacity" min="0" max="1" step="0.05" value="0.5">
+            </div>
+            <div class="control-group">
+                <label for="templateName">Nombre de la plantilla:</label>
+                <input type="text" id="templateName" placeholder="Ej. Instagram Story">
+                <button id="saveTemplate">Guardar Plantilla</button>
+                <select id="loadTemplate">
+                    <option value="">Seleccionar Plantilla</option>
+                </select>
+            </div>
+            <button id="generateButton">Generar Preview</button>
+            <button id="clearButton">Limpiar</button>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
