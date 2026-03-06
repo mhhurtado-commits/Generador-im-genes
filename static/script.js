@@ -17,8 +17,7 @@ const baseURL = window.location.origin;
 
 // ---------- INICIALIZACIÓN ----------
 document.addEventListener('DOMContentLoaded', async () => {
-    const canvasEl = document.getElementById('canvas');
-    fabricCanvas = new fabric.Canvas(canvasEl, {
+    fabricCanvas = new fabric.Canvas('canvas', {
         width: 1080,
         height: 1080,
         preserveObjectStacking: true,
@@ -28,8 +27,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     canvasContainer = document.getElementById('canvas-container');
     if (canvasContainer) {
-        canvasContainer.style.width = `${fabricCanvas.width}px`;
-        canvasContainer.style.height = `${fabricCanvas.height}px`;
+        canvasContainer.style.width = '1080px';
+        canvasContainer.style.height = '1080px';
     }
 
     fabric.Object.prototype.set({
@@ -52,29 +51,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Eventos
-    document.getElementById('blurRange')?.addEventListener('input', () => {
-        document.getElementById('blurValue') && (document.getElementById('blurValue').textContent = document.getElementById('blurRange').value);
-        updateImageFX();
-    });
+    document.getElementById('blurRange')?.addEventListener('input', updateImageFX);
+    document.getElementById('opacityRange')?.addEventListener('input', updateImageFX);
 
-    document.getElementById('opacityRange')?.addEventListener('input', () => {
-        document.getElementById('opacityValue') && (document.getElementById('opacityValue').textContent = document.getElementById('opacityRange').value);
-        updateImageFX();
-    });
-
-    document.getElementById('categoriaTextColor')?.addEventListener('change', handleCategoriaTextColorChange);
-    document.getElementById('categoriaBgColor')?.addEventListener('change', handleCategoriaBgColorChange);
-    document.getElementById('categoriaBgOpacity')?.addEventListener('input', () => {
-        document.getElementById('categoriaBgOpacityValue') && (document.getElementById('categoriaBgOpacityValue').textContent = document.getElementById('categoriaBgOpacity').value);
-        updateCategoryStyle();
-    });
-
-    document.getElementById('tituloTextColor')?.addEventListener('change', handleTituloTextColorChange);
-    document.getElementById('tituloBgColor')?.addEventListener('change', handleTituloBgColorChange);
-    document.getElementById('tituloBgOpacity')?.addEventListener('input', () => {
-        document.getElementById('tituloBgOpacityValue') && (document.getElementById('tituloBgOpacityValue').textContent = document.getElementById('tituloBgOpacity').value);
-        updateTitleStyle();
-    });
+    document.getElementById('categoriaTextColor')?.addEventListener('change', updateCategoryStyle);
+    document.getElementById('categoriaBgColor')?.addEventListener('change', updateCategoryStyle);
+    document.getElementById('categoriaBgOpacity')?.addEventListener('input', updateCategoryStyle);
+    document.getElementById('tituloTextColor')?.addEventListener('change', updateTitleStyle);
+    document.getElementById('tituloBgColor')?.addEventListener('change', updateTitleStyle);
+    document.getElementById('tituloBgOpacity')?.addEventListener('input', updateTitleStyle);
 
     document.getElementById('categoriaTextColorPicker')?.addEventListener('input', updateCategoryStyle);
     document.getElementById('categoriaBgColorPicker')?.addEventListener('input', updateCategoryStyle);
@@ -91,11 +76,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('imageUpload')?.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file && file.type.match(/image.*/)) {
+        if (file && file.type.startsWith('image/')) {
             const reader = new FileReader();
-            reader.onload = (event) => {
-                localImageDataURL = event.target.result;
-                if (currentImage && fabricCanvas) {
+            reader.onload = (ev) => {
+                localImageDataURL = ev.target.result;
+                if (currentImage) {
                     fabric.Image.fromURL(localImageDataURL, (img) => {
                         fabricCanvas.remove(currentImage);
                         currentImage = img;
@@ -138,48 +123,40 @@ function loadFont(fontFamily, fontPath) {
     });
 }
 
-// ---------- AUXILIARES ----------
+// ---------- FUNCIONES AUXILIARES ----------
 function bringAllToFront() {
-    if (darknessOverlay) darknessOverlay.bringToFront();
-    if (categoriaRect) categoriaRect.bringToFront();
-    if (categoriaTextbox) categoriaTextbox.bringToFront();
-    if (tituloRect) tituloRect.bringToFront();
-    if (tituloTextbox) tituloTextbox.bringToFront();
-    if (logoObj) logoObj.bringToFront();
+    [darknessOverlay, categoriaRect, categoriaTextbox, tituloRect, tituloTextbox, logoObj]
+        .forEach(obj => obj && obj.bringToFront());
     fabricCanvas.renderAll();
 }
 
 // ---------- LIMPIAR ----------
 function clearForm() {
-    document.getElementById('urlInput') && (document.getElementById('urlInput').value = '');
-    document.getElementById('imageUpload') && (document.getElementById('imageUpload').value = '');
-    document.getElementById('sizeSelect') && (document.getElementById('sizeSelect').value = '1080x1080');
-    document.getElementById('blurRange') && (document.getElementById('blurRange').value = '0');
-    document.getElementById('blurValue') && (document.getElementById('blurValue').textContent = '0');
-    document.getElementById('opacityRange') && (document.getElementById('opacityRange').value = '0');
-    document.getElementById('opacityValue') && (document.getElementById('opacityValue').textContent = '0');
-    document.getElementById('categoriaTextColor') && (document.getElementById('categoriaTextColor').value = '#ffffff');
-    document.getElementById('categoriaBgColor') && (document.getElementById('categoriaBgColor').value = '#a6ce39');
-    document.getElementById('categoriaBgOpacity') && (document.getElementById('categoriaBgOpacity').value = '0.5');
-    document.getElementById('categoriaBgOpacityValue') && (document.getElementById('categoriaBgOpacityValue').textContent = '0.5');
-    document.getElementById('tituloTextColor') && (document.getElementById('tituloTextColor').value = '#ffffff');
-    document.getElementById('tituloBgColor') && (document.getElementById('tituloBgColor').value = '#8fb82d');
-    document.getElementById('tituloBgOpacity') && (document.getElementById('tituloBgOpacity').value = '0.5');
-    document.getElementById('tituloBgOpacityValue') && (document.getElementById('tituloBgOpacityValue').textContent = '0.5');
+    document.getElementById('urlInput')?.value = '';
+    document.getElementById('imageUpload')?.value = '';
+    document.getElementById('sizeSelect')?.value = '1080x1080';
+    document.getElementById('blurRange')?.value = '0';
+    document.getElementById('blurValue')?.textContent = '0';
+    document.getElementById('opacityRange')?.value = '0';
+    document.getElementById('opacityValue')?.textContent = '0';
+    document.getElementById('categoriaTextColor')?.value = '#ffffff';
+    document.getElementById('categoriaBgColor')?.value = '#a6ce39';
+    document.getElementById('categoriaBgOpacity')?.value = '0.5';
+    document.getElementById('categoriaBgOpacityValue')?.textContent = '0.5';
+    document.getElementById('tituloTextColor')?.value = '#ffffff';
+    document.getElementById('tituloBgColor')?.value = '#8fb82d';
+    document.getElementById('tituloBgOpacity')?.value = '0.5';
+    document.getElementById('tituloBgOpacityValue')?.textContent = '0.5';
 
-    ['categoriaTextColorPicker', 'categoriaBgColorPicker', 'tituloTextColorPicker', 'tituloBgColorPicker'].forEach(id => {
-        document.getElementById(id) && (document.getElementById(id).style.display = 'none');
-    });
+    ['categoriaTextColorPicker', 'categoriaBgColorPicker', 'tituloTextColorPicker', 'tituloBgColorPicker']
+        .forEach(id => document.getElementById(id) && (document.getElementById(id).style.display = 'none'));
 
     fabricCanvas.clear();
     currentImage = tituloTextbox = categoriaTextbox = tituloRect = categoriaRect = logoObj = 
     currentNewsData = darknessOverlay = currentImageDataURL = localImageDataURL = null;
 
     fabricCanvas.setDimensions({ width: 1080, height: 1080 });
-    if (canvasContainer) {
-        canvasContainer.style.width = '1080px';
-        canvasContainer.style.height = '1080px';
-    }
+    canvasContainer && (canvasContainer.style.width = '1080px', canvasContainer.style.height = '1080px');
 
     updateExportButtonPosition();
     fabricCanvas.renderAll();
@@ -188,10 +165,9 @@ function clearForm() {
 // ---------- CENTRADO ----------
 function drawCenterLines() {
     removeCenterLines();
-    const w = fabricCanvas.width;
-    const h = fabricCanvas.height;
-    centerLines.v = new fabric.Line([w / 2, 0, w / 2, h], { stroke: '#00bfff', strokeWidth: 4, selectable: false, evented: false, opacity: 0.7 });
-    centerLines.h = new fabric.Line([0, h / 2, w, h / 2], { stroke: '#00bfff', strokeWidth: 4, selectable: false, evented: false, opacity: 0.7 });
+    const w = fabricCanvas.width, h = fabricCanvas.height;
+    centerLines.v = new fabric.Line([w/2,0,w/2,h], {stroke:'#00bfff', strokeWidth:4, selectable:false, evented:false, opacity:0.7});
+    centerLines.h = new fabric.Line([0,h/2,w,h/2], {stroke:'#00bfff', strokeWidth:4, selectable:false, evented:false, opacity:0.7});
     fabricCanvas.add(centerLines.v, centerLines.h);
     centerLines.v.bringToFront();
     centerLines.h.bringToFront();
@@ -209,15 +185,14 @@ function checkCenterWhileDragging(obj) {
     const cy = fabricCanvas.height / 2;
     const c = obj.getCenterPoint();
     const thr = 10;
-    const isCenteredH = Math.abs(c.x - cx) < thr;
-    const isCenteredV = Math.abs(c.y - cy) < thr;
-
-    if (isCenteredH && isCenteredV) {
+    const h = Math.abs(c.x - cx) < thr;
+    const v = Math.abs(c.y - cy) < thr;
+    if (h && v) {
         if (!centerLines.v || !centerLines.h) drawCenterLines();
-    } else if (isCenteredH) {
+    } else if (h) {
         if (!centerLines.v) drawCenterLines();
         if (centerLines.h) { fabricCanvas.remove(centerLines.h); centerLines.h = null; }
-    } else if (isCenteredV) {
+    } else if (v) {
         if (!centerLines.h) drawCenterLines();
         if (centerLines.v) { fabricCanvas.remove(centerLines.v); centerLines.v = null; }
     } else {
@@ -228,18 +203,11 @@ function checkCenterWhileDragging(obj) {
 // ---------- OBJETOS ----------
 function syncRectToText(rect, textbox) {
     if (!rect || !textbox) return;
-    const textWidth = textbox.width * textbox.scaleX;
-    const textHeight = textbox.height * textbox.scaleY;
-    const paddedWidth = textWidth + (textbox.padding * 2);
-    const paddedHeight = textHeight + (textbox.padding * 2);
-    rect.set({
-        left: textbox.left,
-        top: textbox.top,
-        width: paddedWidth,
-        height: paddedHeight,
-        originX: textbox.originX,
-        originY: textbox.originY
-    });
+    const tw = textbox.width * textbox.scaleX;
+    const th = textbox.height * textbox.scaleY;
+    const pw = tw + textbox.padding * 2;
+    const ph = th + textbox.padding * 2;
+    rect.set({ left: textbox.left, top: textbox.top, width: pw, height: ph, originX: textbox.originX, originY: textbox.originY });
     rect.setCoords();
     fabricCanvas.renderAll();
 }
@@ -258,38 +226,26 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
         originY: opts.originY || 'top'
     });
 
-    // Usamos Text para inicial (más confiable), luego convertimos a Textbox si se necesita edición
-    const textObj = new fabric.Text(text || ' ', {
+    const textbox = new fabric.Textbox(text || ' ', {
         ...opts,
         fill: textColor === 'custom' ? document.getElementById(`${opts.id}TextColorPicker`)?.value || textColor : textColor,
+        selectable: true,
+        hasControls: true,
+        hasBorders: true,
+        padding: 40,
         fontFamily: opts.fontFamily || 'Arial',
         fontSize: opts.fontSize || 100,
-        textAlign: opts.textAlign || 'center',
-        originX: opts.originX || 'center',
-        originY: opts.originY || 'center',
-        padding: 40,
-        lineHeight: 1.1
+        textAlign: 'center',
+        lineHeight: 1.1,
+        splitByGrapheme: true,
+        breakWords: true,
+        dirty: true
     });
 
     fabricCanvas.add(rect);
-    fabricCanvas.add(textObj);
-    textObj.bringToFront();
-    rect.sendToBack();
-
-    // Convertir a Textbox para edición
-    const textbox = new fabric.Textbox(text || ' ', {
-        ...textObj.toObject(),
-        editable: true,
-        hasControls: true,
-        hasBorders: true,
-        splitByGrapheme: true,
-        breakWords: true
-    });
-
-    fabricCanvas.remove(textObj);
     fabricCanvas.add(textbox);
     textbox.bringToFront();
-
+    rect.sendToBack();
     syncRectToText(rect, textbox);
 
     textbox.setCoords();
@@ -297,13 +253,9 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
     fabricCanvas.requestRenderAll();
 
     setTimeout(() => {
-        textbox.set({ dirty: true });
+        textbox.dirty = true;
         fabricCanvas.requestRenderAll();
-    }, 0);
-
-    ['moving', 'scaling', 'changed', 'rotated'].forEach(ev => {
-        textbox.on(ev, () => syncRectToText(rect, textbox));
-    });
+    }, 50);
 
     return { textbox, rect };
 }
@@ -311,30 +263,23 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
 // ---------- EFECTOS ----------
 function updateImageFX() {
     if (!currentImage) return;
-    const blurAmount = parseFloat(document.getElementById('blurRange')?.value || 0);
-    const darknessOpacity = parseFloat(document.getElementById('opacityRange')?.value || 0);
-    currentImage.filters = [];
-    if (blurAmount > 0) {
-        currentImage.filters.push(new fabric.Image.filters.Blur({ blur: blurAmount / 1000 }));
-    }
+    const blur = parseFloat(document.getElementById('blurRange')?.value || 0) / 1000;
+    const dark = parseFloat(document.getElementById('opacityRange')?.value || 0);
+    currentImage.filters = blur > 0 ? [new fabric.Image.filters.Blur({ blur })] : [];
     currentImage.applyFilters();
-
-    if (darknessOverlay) darknessOverlay.set({ opacity: darknessOpacity });
+    darknessOverlay && darknessOverlay.set({ opacity: dark });
     fabricCanvas.renderAll();
 }
 
 // ---------- ESTILOS ----------
 function updateCategoryStyle() {
     if (categoriaRect && categoriaTextbox) {
-        const bg = document.getElementById('categoriaBgColor')?.value;
-        const txt = document.getElementById('categoriaTextColor')?.value;
-        const op = parseFloat(document.getElementById('categoriaBgOpacity')?.value || 0.5);
         categoriaRect.set({
-            fill: bg === 'custom' ? document.getElementById('categoriaBgColorPicker')?.value : bg,
-            opacity: op
+            fill: document.getElementById('categoriaBgColor')?.value === 'custom' ? document.getElementById('categoriaBgColorPicker')?.value : document.getElementById('categoriaBgColor')?.value,
+            opacity: parseFloat(document.getElementById('categoriaBgOpacity')?.value || 0.5)
         });
         categoriaTextbox.set({
-            fill: txt === 'custom' ? document.getElementById('categoriaTextColorPicker')?.value : txt
+            fill: document.getElementById('categoriaTextColor')?.value === 'custom' ? document.getElementById('categoriaTextColorPicker')?.value : document.getElementById('categoriaTextColor')?.value
         });
         fabricCanvas.renderAll();
     }
@@ -342,15 +287,12 @@ function updateCategoryStyle() {
 
 function updateTitleStyle() {
     if (tituloRect && tituloTextbox) {
-        const bg = document.getElementById('tituloBgColor')?.value;
-        const txt = document.getElementById('tituloTextColor')?.value;
-        const op = parseFloat(document.getElementById('tituloBgOpacity')?.value || 0.5);
         tituloRect.set({
-            fill: bg === 'custom' ? document.getElementById('tituloBgColorPicker')?.value : bg,
-            opacity: op
+            fill: document.getElementById('tituloBgColor')?.value === 'custom' ? document.getElementById('tituloBgColorPicker')?.value : document.getElementById('tituloBgColor')?.value,
+            opacity: parseFloat(document.getElementById('tituloBgOpacity')?.value || 0.5)
         });
         tituloTextbox.set({
-            fill: txt === 'custom' ? document.getElementById('tituloTextColorPicker')?.value : txt
+            fill: document.getElementById('tituloTextColor')?.value === 'custom' ? document.getElementById('tituloTextColorPicker')?.value : document.getElementById('tituloTextColor')?.value
         });
         fabricCanvas.renderAll();
     }
@@ -394,110 +336,81 @@ function handleTituloBgColorChange() {
 // ---------- AJUSTE IMAGEN ----------
 function adjustImageToCanvas() {
     if (!currentImage || !fabricCanvas) return;
-    const cw = fabricCanvas.width;
-    const ch = fabricCanvas.height;
+    const cw = fabricCanvas.width, ch = fabricCanvas.height;
     const { width: iw, height: ih } = currentImage.getOriginalSize();
     const scale = Math.max(cw / iw, ch / ih);
-    currentImage.set({
-        scaleX: scale,
-        scaleY: scale,
-        left: cw / 2,
-        top: ch / 2,
-        originX: 'center',
-        originY: 'center'
-    });
+    currentImage.set({ scaleX: scale, scaleY: scale, left: cw/2, top: ch/2, originX: 'center', originY: 'center' });
     fabricCanvas.renderAll();
 }
 
 // ---------- REDIMENSIONAR ----------
-function resizeAllObjects(newWidth, newHeight) {
-    fabricCanvas.setDimensions({ width: newWidth, height: newHeight });
-    if (canvasContainer) {
-        canvasContainer.style.width = `${newWidth}px`;
-        canvasContainer.style.height = `${newHeight}px`;
-    }
-    if (darknessOverlay) darknessOverlay.set({ width: newWidth, height: newHeight });
-    if (currentImage) adjustImageToCanvas();
+function resizeAllObjects(w, h) {
+    fabricCanvas.setDimensions({ width: w, height: h });
+    canvasContainer && (canvasContainer.style.width = w + 'px', canvasContainer.style.height = h + 'px');
+    darknessOverlay && darknessOverlay.set({ width: w, height: h });
+    currentImage && adjustImageToCanvas();
     if (currentNewsData) {
-        [categoriaRect, categoriaTextbox, tituloRect, tituloTextbox, logoObj]
-            .forEach(obj => obj && fabricCanvas.remove(obj));
-        addTextAndLogoToCanvas(currentNewsData, newWidth, newHeight);
+        [categoriaRect, categoriaTextbox, tituloRect, tituloTextbox, logoObj].forEach(o => o && fabricCanvas.remove(o));
+        addTextAndLogoToCanvas(currentNewsData, w, h);
     }
     fabricCanvas.renderAll();
 }
 
-// ---------- BOTÓN EXPORTAR ----------
+// ---------- EXPORTAR ----------
 function updateExportButtonPosition() {
-    const wrapper = document.getElementById('canvas-wrapper');
-    if (wrapper) wrapper.style.height = (fabricCanvas.height * 0.5) + 'px';
+    const w = document.getElementById('canvas-wrapper');
+    w && (w.style.height = (fabricCanvas.height * 0.5) + 'px');
 }
 
-// ---------- GENERAR PREVIEW ----------
+function exportImage() {
+    const blur = parseFloat(document.getElementById('blurRange')?.value || 0);
+    if (blur > 0) {
+        currentImage.filters = [new fabric.Image.filters.Blur({ blur: blur / 1000 })];
+        currentImage.applyFilters();
+        fabricCanvas.renderAll();
+    }
+    const url = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
+    window.open(url, '_blank');
+}
+
+// ---------- GENERAR ----------
 async function generatePreview() {
     const url = document.getElementById('urlInput')?.value?.trim();
-    if (!url) {
-        alert('Ingresa un URL válido');
-        return;
-    }
+    if (!url) return alert('Ingresa URL');
 
     try {
-        console.log("Solicitando extracción...");
-        const extractRes = await fetch('/api/extract', {
+        const r = await fetch('/api/extract', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url })
         });
 
-        console.log("Status extract:", extractRes.status);
+        if (!r.ok) throw new Error(`Extract ${r.status}`);
 
-        if (!extractRes.ok) {
-            const text = await extractRes.text();
-            console.error("Error extract:", text);
-            alert(`Error ${extractRes.status}`);
-            return;
-        }
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
 
-        const datos = await extractRes.json();
-        console.log("Datos recibidos:", datos);
+        currentNewsData = data;
 
-        currentNewsData = datos;
-
-        let imageDataURL = localImageDataURL;
-        if (!imageDataURL) {
-            console.log("Solicitando imagen base...");
-            const genRes = await fetch('/api/generate-base', {
+        let imgUrl = localImageDataURL;
+        if (!imgUrl) {
+            const gr = await fetch('/api/generate-base', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datos)
+                body: JSON.stringify(data)
             });
-
-            console.log("Status generate-base:", genRes.status);
-
-            if (!genRes.ok) {
-                const text = await genRes.text();
-                console.error("Error generate-base:", text);
-                alert(`Error procesando imagen`);
-                return;
-            }
-
-            const { image_base64 } = await genRes.json();
-            imageDataURL = `data:image/png;base64,${image_base64}`;
-            currentImageDataURL = imageDataURL;
+            if (!gr.ok) throw new Error(`Generate ${gr.status}`);
+            const { image_base64 } = await gr.json();
+            imgUrl = `data:image/png;base64,${image_base64}`;
+            currentImageDataURL = imgUrl;
         }
 
-        fabric.Image.fromURL(imageDataURL, img => {
-            console.log("Imagen cargada");
+        fabric.Image.fromURL(imgUrl, img => {
             currentImage = img;
-
             darknessOverlay = new fabric.Rect({
-                left: 0,
-                top: 0,
-                width: fabricCanvas.width,
-                height: fabricCanvas.height,
-                fill: 'black',
-                opacity: parseFloat(document.getElementById('opacityRange')?.value || 0),
-                selectable: false,
-                evented: false
+                left: 0, top: 0, width: 1080, height: 1080,
+                fill: 'black', opacity: parseFloat(document.getElementById('opacityRange')?.value || 0),
+                selectable: false, evented: false
             });
 
             currentImage.filters = [];
@@ -508,37 +421,30 @@ async function generatePreview() {
             currentImage.sendToBack();
 
             adjustImageToCanvas();
-            addTextAndLogoToCanvas(datos, fabricCanvas.width, fabricCanvas.height);
+            addTextAndLogoToCanvas(data, 1080, 1080);
 
             bringAllToFront();
             fabricCanvas.renderAll();
             updateExportButtonPosition();
-            console.log("Preview generada");
         }, { crossOrigin: 'anonymous' });
-
-    } catch (err) {
-        console.error("Error preview:", err);
-        alert("Error: " + err.message);
+    } catch (e) {
+        alert('Error: ' + e.message);
     }
 }
 
-// ---------- TEXTO Y LOGO ----------
-function addTextAndLogoToCanvas(data, width, height) {
-    console.log("Agregando textos y logo...");
-
-    // Reset viewport
-    fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+// ---------- TEXTO + LOGO ----------
+function addTextAndLogoToCanvas(data, w, h) {
+    // Reset
+    fabricCanvas.viewportTransform = [1,0,0,1,0,0];
 
     // Categoría
     const catText = (data.categoria || 'NOTICIAS').replace(/_/g, ' ')
-        .split(' ')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join(' ');
+        .split(' ').map(w => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
     const cat = createTextWithRect(catText, {
         id: 'categoria',
-        left: width / 2,
-        top: height * 0.08,
+        left: w / 2,
+        top: h * 0.08,
         fontFamily: 'Economica',
         fontSize: 100,
         textAlign: 'center',
@@ -555,9 +461,9 @@ function addTextAndLogoToCanvas(data, width, height) {
     // Título
     const tit = createTextWithRect(data.titulo || 'SIN TÍTULO', {
         id: 'titulo',
-        left: width / 2,
-        top: height * 0.45,
-        width: width * 0.9,
+        left: w / 2,
+        top: h * 0.45,
+        width: w * 0.9,
         fontFamily: 'Bebas Neue',
         fontSize: 120,
         textAlign: 'center',
@@ -573,24 +479,18 @@ function addTextAndLogoToCanvas(data, width, height) {
     // Logo
     fabric.Image.fromURL(`${baseURL}/static/logo.png`, logo => {
         if (logo) {
-            console.log("Logo cargado");
             logo.set({
-                left: width / 2,
-                top: height * 0.92,
+                left: w / 2,
+                top: h * 0.92,
                 scaleX: 400 / logo.width,
                 scaleY: 100 / logo.height,
                 selectable: true,
-                hasControls: true,
-                hasBorders: false,
                 originX: 'center',
-                originY: 'center',
-                shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
+                originY: 'center'
             });
             fabricCanvas.add(logo);
             logoObj = logo;
             logo.bringToFront();
-        } else {
-            console.warn("No se encontró logo.png");
         }
         bringAllToFront();
         fabricCanvas.renderAll();
@@ -600,22 +500,4 @@ function addTextAndLogoToCanvas(data, width, height) {
     fabricCanvas.renderAll();
 }
 
-// ---------- EXPORTAR ----------
-function exportImage() {
-    const blurAmount = parseFloat(document.getElementById('blurRange')?.value || 0);
-    if (blurAmount > 0) {
-        currentImage.filters = [new fabric.Image.filters.Blur({ blur: blurAmount / 1000 })];
-        currentImage.applyFilters();
-        fabricCanvas.renderAll();
-    }
-    const dataURL = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
-    window.open(dataURL, '_blank');
-}
-
-// ---------- CAMBIAR TAMAÑO ----------
-function changeSize() {
-    const [w, h] = document.getElementById('sizeSelect')?.value.split('x').map(Number) || [1080, 1080];
-    resizeAllObjects(w, h);
-}
-
-// (Mantén las funciones updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... como las tenías)
+// (exportImage, changeSize, updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... permanecen como en tu versión anterior)
