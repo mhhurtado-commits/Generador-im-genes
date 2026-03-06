@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from io import BytesIO
 import base64
 
-# Configuración de carpetas para que funcione en la nube
+# Configuración de carpetas
 app = Flask(__name__, 
             static_folder='static', 
             template_folder='templates')
@@ -27,24 +27,25 @@ def extract():
         return jsonify({'error': 'URL no proporcionada'}), 400
 
     try:
-        # User-agent para evitar que el diario nos bloquee por parecer un bot
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        titulo = soup.find('meta', property='og:title')
-        titulo = titulo['content'] if titulo else soup.title.string
+        # Título
+        titulo_tag = soup.find('meta', property='og:title')
+        titulo = titulo_tag['content'] if titulo_tag else (soup.title.string if soup.title else "Sin título")
 
+        # Categoría
         url_part = urlparse(url)
-        # Manejo simple de categoría basado en la URL
         path_parts = [p for p in url_part.path.split('/') if p]
         categoria = path_parts[0].upper() if path_parts else "NOTICIAS"
         
+        # Imagen
         meta_image = soup.find('meta', property='og:image')
         imagen_url = meta_image['content'] if meta_image else None
 
         if not imagen_url:
-            return jsonify({'error': 'No se encontró una imagen para la URL'}), 404
+            return jsonify({'error': 'No se encontró imagen en la noticia'}), 404
 
         return jsonify({
             'titulo': titulo,
@@ -54,60 +55,53 @@ def extract():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/proxy-image')
-def proxy_image():
-    url = request.args.get('url')
-    if not url:
-        return "No URL provided", 400
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(url, headers=headers)
-        return (resp.content, resp.status_code, resp.headers.items())
-    except Exception as e:
-        return str(e), 500
-
 @app.route('/api/process-image', methods=['POST'])
 def process_image():
     data = request.json
-    img_data = data.get('image')
-    if not img_data:
-        return jsonify({'error': 'No image data'}), 400
+    # CAMBIO CLAVE: Ahora buscamos 'imagen_url' que viene del extractor
+    imagen_url = data.get('imagen_url')
+    
+    if not imagen_url:
+        return jsonify({'error': 'No se proporcionó URL de imagen'}), 400
 
     try:
-        # Quitar el encabezado base64 si existe
-        if ',' in img_data:
-            img_data = img_data.split(',')[1]
+        # Descargar la imagen directamente desde el servidor (evita bloqueos de navegador)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        img_response = requests.get(imagen_url, headers=headers, timeout=10)
+        img = Image.open(BytesIO(img_response.content))
         
-        img_bytes = base64.b64decode(img_data)
-        img = Image.open(BytesIO(img_bytes))
-        
-        # Convertir a RGB si es necesario (para JPG)
+        # Convertir a RGB
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
 
-        # El proceso de redimensionado que ya tenías
+        # Redimensionado inteligente (Cover)
         target_width, target_height = 1080, 1080
-        canvas_ratio = target_width / target_height
         img_width, img_height = img.size
+        
         img_ratio = img_width / img_height
-        
-        if img_ratio > canvas_ratio:
+        target_ratio = target_width / target_height
+
+        if img_ratio > target_ratio:
+            # Más ancha que alta
             new_height = target_height
-            new_width = int(img_width * (new_height / img_height))
+            new_width = int(img_ratio * new_height)
         else:
+            # Más alta que ancha
             new_width = target_width
-            new_height = int(img_height * (new_width / img_width))
-        
+            new_height = int(new_width / img_ratio)
+
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        left = (new_width - target_width) // 2
-        top = (new_height - target_height) // 2
-        right = left + target_width
-        bottom = top + target_height
+        # Recortar al centro
+        left = (new_width - target_width) / 2
+        top = (new_height - target_height) / 2
+        right = (new_width + target_width) / 2
+        bottom = (new_height + target_height) / 2
         img = img.crop((left, top, right, bottom))
         
+        # Exportar a Base64
         buffered = BytesIO()
-        img.save(buffered, format="JPEG", quality=90) 
+        img.save(buffered, format="JPEG", quality=85)
         base64_img = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
         return jsonify({
@@ -119,9 +113,6 @@ def process_image():
         print(f"Error procesando imagen: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ESTA PARTE ES CLAVE PARA QUE FUNCIONE EN INTERNET
 if __name__ == '__main__':
-    # Render asigna un puerto automáticamente en la variable de entorno PORT
     port = int(os.environ.get('PORT', 5000))
-    # En producción usamos 0.0.0.0 para que sea accesible externamente
     app.run(host='0.0.0.0', port=port)
