@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generador de Previews</title>
-    
+
     <style>
         :root {
             --verde-mm: #a6ce39;
@@ -19,20 +19,21 @@
         }
 
         body {
-            font-family: 'Montserrat-Regular', Arial, sans-serif;
+            font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--bg-light);
+            background: var(--bg-light);
             color: var(--text-light);
         }
 
         body.dark {
-            background-color: var(--bg-dark);
+            background: var(--bg-dark);
             color: var(--text-dark);
         }
 
         body.dark #controls {
-            background-color: var(--control-bg-dark);
+            background: var(--control-bg-dark);
+            color: var(--text-dark);
         }
 
         #app-container {
@@ -52,12 +53,10 @@
         }
 
         .logo-wrapper {
-            position: relative;
-            display: inline-block;
             background: rgba(143, 184, 45, 0.7);
             border-radius: 8px;
             padding: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             border: 3px solid white;
         }
 
@@ -70,17 +69,15 @@
         #canvas-wrapper {
             position: relative;
             display: inline-block;
-            height: auto;
         }
 
         #canvas-container {
             position: relative;
             border: 1px solid #ccc;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            background-color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background: white;
             transform: scale(0.5);
             transform-origin: top center;
-            transition: filter 0.3s ease;
         }
 
         #exportButton {
@@ -88,19 +85,18 @@
             bottom: -10px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: var(--verde-mm);
+            background: var(--verde-mm);
             color: white;
             border: none;
             padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
             z-index: 5;
             font-weight: bold;
         }
 
         #exportButton:hover {
-            background-color: var(--verde-osc);
+            background: var(--verde-osc);
         }
 
         #controls {
@@ -110,9 +106,9 @@
             width: 100%;
             max-width: 400px;
             padding: 20px;
-            background-color: var(--control-bg-light);
+            background: var(--control-bg-light);
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
         .control-group {
@@ -121,71 +117,31 @@
             gap: 5px;
         }
 
-        label {
-            font-weight: bold;
-        }
-
-        input[type="range"] {
-            width: 100%;
-            height: 8px;
-            border-radius: 5px;
-            background: #d3d3d3;
-            outline: none;
-            opacity: 0.7;
-            transition: opacity 0.2s ease;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: var(--verde-mm);
-            cursor: pointer;
-        }
-
-        button, input[type="text"], select, input[type="color"], input[type="file"] {
+        label { font-weight: bold; }
+        input[type="range"] { width: 100%; height: 8px; background: #d3d3d3; border-radius: 5px; }
+        input[type="range"]::-webkit-slider-thumb { width: 20px; height: 20px; background: var(--verde-mm); border-radius: 50%; cursor: pointer; }
+        button, input, select {
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
-            font-size: 1em;
-            transition: all 0.3s ease;
         }
-
         button {
-            background-color: var(--verde-mm);
+            background: var(--verde-mm);
             color: white;
             border: none;
             cursor: pointer;
         }
-
-        button:hover {
-            background-color: var(--verde-osc);
-        }
-
-        .color-picker {
-            display: none;
-            margin-top: 5px;
-            width: 100%;
-            height: 40px;
-        }
-
-        .value-display {
-            font-size: 0.9em;
-            margin-left: 10px;
-            font-weight: normal;
-        }
+        button:hover { background: var(--verde-osc); }
+        .color-picker { display: none; margin-top: 5px; width: 100%; height: 40px; }
+        .value-display { font-size: 0.9em; margin-left: 10px; }
     </style>
 </head>
 <body class="light">
-
     <div id="app-container">
         <div id="canvas-section">
             <div class="logo-wrapper">
-                <img src="/static/logo.png" alt="Logo DirecTV" class="logo">
+                <img src="/static/logo.png" alt="Logo" class="logo">
             </div>
-            
             <h1>Generador de Previews</h1>
 
             <div id="canvas-wrapper">
@@ -203,7 +159,7 @@
             </div>
 
             <div class="control-group">
-                <label for="imageUpload">Imagen de portada (opcional):</label>
+                <label for="imageUpload">Imagen local (opcional):</label>
                 <input type="file" id="imageUpload" accept="image/*">
             </div>
 
@@ -218,112 +174,84 @@
             <div class="control-group">
                 <label for="sizeSelect">Tamaño:</label>
                 <select id="sizeSelect">
-                    <option value="1080x1080">Cuadrado (1080×1080)</option>
-                    <option value="1080x1350">Instagram Portrait (1080×1350)</option>
-                    <option value="1080x1920">Instagram Story (1080×1920)</option>
+                    <option value="1080x1080">Cuadrado 1080×1080</option>
+                    <option value="1080x1350">Vertical 1080×1350</option>
+                    <option value="1080x1920">Historia 1080×1920</option>
                 </select>
             </div>
 
             <div class="control-group">
-                <label for="blurRange">
-                    Desenfoque de la imagen: <span id="blurValue" class="value-display">0</span>
-                </label>
-                <input type="range" id="blurRange" min="0" max="100" value="0" step="1">
+                <label for="blurRange">Desenfoque: <span id="blurValue" class="value-display">0</span></label>
+                <input type="range" id="blurRange" min="0" max="100" value="0">
             </div>
 
             <div class="control-group">
-                <label for="opacityRange">
-                    Opacidad del fondo: <span id="opacityValue" class="value-display">0</span>
-                </label>
+                <label for="opacityRange">Oscurecer: <span id="opacityValue" class="value-display">0</span></label>
                 <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0">
             </div>
 
             <!-- Categoría -->
             <div class="control-group">
-                <label for="categoriaTextColor">Color texto categoría:</label>
+                <label>Texto categoría:</label>
                 <select id="categoriaTextColor">
                     <option value="#ffffff">Blanco</option>
                     <option value="#000000">Negro</option>
-                    <option value="#a6ce39" selected>Verde Claro</option>
-                    <option value="#8fb82d">Verde Oscuro</option>
+                    <option value="#a6ce39" selected>Verde claro</option>
                     <option value="custom">Personalizado</option>
                 </select>
                 <input type="color" id="categoriaTextColorPicker" class="color-picker">
             </div>
 
             <div class="control-group">
-                <label for="categoriaBgColor">Fondo categoría:</label>
+                <label>Fondo categoría:</label>
                 <select id="categoriaBgColor">
-                    <option value="#a6ce39" selected>Verde Claro</option>
-                    <option value="#8fb82d">Verde Oscuro</option>
+                    <option value="#a6ce39" selected>Verde claro</option>
+                    <option value="#8fb82d">Verde oscuro</option>
                     <option value="#ffffff">Blanco</option>
-                    <option value="#000000">Negro</option>
                     <option value="custom">Personalizado</option>
                 </select>
                 <input type="color" id="categoriaBgColorPicker" class="color-picker">
             </div>
 
             <div class="control-group">
-                <label for="categoriaBgOpacity">
-                    Opacidad fondo categoría: <span id="categoriaBgOpacityValue" class="value-display">0.5</span>
-                </label>
+                <label>Opacidad fondo cat.: <span id="categoriaBgOpacityValue" class="value-display">0.5</span></label>
                 <input type="range" id="categoriaBgOpacity" min="0" max="1" step="0.05" value="0.5">
             </div>
 
             <!-- Título -->
             <div class="control-group">
-                <label for="tituloTextColor">Color texto título:</label>
+                <label>Texto título:</label>
                 <select id="tituloTextColor">
                     <option value="#ffffff">Blanco</option>
                     <option value="#000000">Negro</option>
-                    <option value="#a6ce39" selected>Verde Claro</option>
-                    <option value="#8fb82d">Verde Oscuro</option>
+                    <option value="#a6ce39" selected>Verde claro</option>
                     <option value="custom">Personalizado</option>
                 </select>
                 <input type="color" id="tituloTextColorPicker" class="color-picker">
             </div>
 
             <div class="control-group">
-                <label for="tituloBgColor">Fondo título:</label>
+                <label>Fondo título:</label>
                 <select id="tituloBgColor">
-                    <option value="#8fb82d">Verde Oscuro</option>
-                    <option value="#a6ce39" selected>Verde Claro</option>
+                    <option value="#8fb82d" selected>Verde oscuro</option>
+                    <option value="#a6ce39">Verde claro</option>
                     <option value="#ffffff">Blanco</option>
-                    <option value="#000000">Negro</option>
                     <option value="custom">Personalizado</option>
                 </select>
                 <input type="color" id="tituloBgColorPicker" class="color-picker">
             </div>
 
             <div class="control-group">
-                <label for="tituloBgOpacity">
-                    Opacidad fondo título: <span id="tituloBgOpacityValue" class="value-display">0.5</span>
-                </label>
+                <label>Opacidad fondo título: <span id="tituloBgOpacityValue" class="value-display">0.5</span></label>
                 <input type="range" id="tituloBgOpacity" min="0" max="1" step="0.05" value="0.5">
             </div>
 
-            <!-- Plantillas -->
-            <div class="control-group">
-                <label for="templateName">Nombre plantilla:</label>
-                <input type="text" id="templateName" placeholder="Ej: Instagram Story">
-                <button id="saveTemplate">Guardar Plantilla</button>
-                
-                <select id="loadTemplate">
-                    <option value="">Seleccionar plantilla</option>
-                </select>
-            </div>
-
-            <!-- Botones principales -->
             <button id="generateButton">Generar Preview</button>
-            <button id="clearButton">Limpiar todo</button>
+            <button id="clearButton">Limpiar</button>
         </div>
     </div>
 
-    <!-- Librería Fabric.js desde CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    
-    <!-- Tu script personalizado -->
     <script src="/static/script.js"></script>
-
 </body>
 </html>
