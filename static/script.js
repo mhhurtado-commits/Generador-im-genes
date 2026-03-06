@@ -264,11 +264,13 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
         selectable: true,
         hasControls: true,
         hasBorders: true,
-        padding: 30, // más espacio
+        padding: 40,
         fontFamily: opts.fontFamily || 'Arial',
-        fontSize: opts.fontSize || 100, // grande para visibilidad inmediata
-        lineHeight: 1.0,
-        splitByGrapheme: true // clave para texto largo
+        fontSize: opts.fontSize || 100,
+        lineHeight: 1.1,
+        splitByGrapheme: true,
+        breakWords: true,
+        editable: true
     });
 
     fabricCanvas.add(rect);
@@ -278,13 +280,14 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
     syncRectToText(rect, textbox);
 
     textbox.setCoords();
+    textbox.dirty = true;
     fabricCanvas.requestRenderAll();
 
-    // Forzar redraw inmediato
+    // Forzado extra de redraw (resuelve el texto invisible inicial)
     setTimeout(() => {
         textbox.set({ dirty: true });
         fabricCanvas.requestRenderAll();
-    }, 0);
+    }, 50);
 
     ['moving', 'scaling', 'changed', 'rotated'].forEach(ev => {
         textbox.on(ev, () => syncRectToText(rect, textbox));
@@ -511,6 +514,9 @@ async function generatePreview() {
 function addTextAndLogoToCanvas(data, width, height) {
     console.log("Agregando textos y logo...");
 
+    // Reset viewport para evitar transformaciones raras
+    fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+
     // Categoría
     const catText = (data.categoria || 'NOTICIAS').replace(/_/g, ' ')
         .split(' ')
@@ -522,9 +528,9 @@ function addTextAndLogoToCanvas(data, width, height) {
         left: width / 2,
         top: height * 0.08,
         fontFamily: 'Economica',
-        fontSize: 90,
+        fontSize: 100,
         textAlign: 'center',
-        width: 800,
+        width: 900,
         originX: 'center',
         originY: 'top'
     }, document.getElementById('categoriaBgColor')?.value || '#a6ce39',
@@ -541,7 +547,7 @@ function addTextAndLogoToCanvas(data, width, height) {
         top: height * 0.45,
         width: width * 0.9,
         fontFamily: 'Bebas Neue',
-        fontSize: 110,
+        fontSize: 120,
         textAlign: 'center',
         originX: 'center',
         originY: 'center'
@@ -600,4 +606,4 @@ function changeSize() {
     resizeAllObjects(w, h);
 }
 
-// (Mantén las funciones updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... como las tenías)
+// (Mantén las funciones updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... como las tenías en tu versión anterior)
