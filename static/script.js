@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await Promise.all([
             loadFont('Economica-Regular', '/static/fonts/Economica-Regular.ttf'),
-            loadFont('Bebasneue-regular', '/static/fonts/Bebasneue-regular.ttf'),
+            loadFont('BebasNeue-Regular', '/static/fonts/BebasNeue-Regular.ttf'),
             loadFont('Montserrat-Regular', '/static/fonts/Montserrat-Regular.ttf')
         ]);
         console.log("Fuentes cargadas con éxito.");
@@ -550,3 +550,4 @@ function changeSize() {
     const [w, h] = document.getElementById('sizeSelect')?.value.split('x').map(Number) || [1080, 1080];
     resizeAllObjects(w, h);
 }
+
