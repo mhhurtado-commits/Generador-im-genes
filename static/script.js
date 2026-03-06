@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn("Algunas fuentes fallaron → usando Arial", err);
     }
 
-    // Eventos (con protección)
+    // Eventos
     document.getElementById('blurRange')?.addEventListener('input', () => {
         document.getElementById('blurValue') && (document.getElementById('blurValue').textContent = document.getElementById('blurRange').value);
         updateImageFX();
@@ -258,36 +258,48 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
         originY: opts.originY || 'top'
     });
 
-    const textbox = new fabric.Textbox(text || ' ', {
+    // Usamos Text para inicial (más confiable), luego convertimos a Textbox si se necesita edición
+    const textObj = new fabric.Text(text || ' ', {
         ...opts,
         fill: textColor === 'custom' ? document.getElementById(`${opts.id}TextColorPicker`)?.value || textColor : textColor,
-        selectable: true,
-        hasControls: true,
-        hasBorders: true,
-        padding: 40,
         fontFamily: opts.fontFamily || 'Arial',
         fontSize: opts.fontSize || 100,
-        lineHeight: 1.1,
-        splitByGrapheme: true,
-        breakWords: true,
-        editable: true
+        textAlign: opts.textAlign || 'center',
+        originX: opts.originX || 'center',
+        originY: opts.originY || 'center',
+        padding: 40,
+        lineHeight: 1.1
     });
 
     fabricCanvas.add(rect);
+    fabricCanvas.add(textObj);
+    textObj.bringToFront();
+    rect.sendToBack();
+
+    // Convertir a Textbox para edición
+    const textbox = new fabric.Textbox(text || ' ', {
+        ...textObj.toObject(),
+        editable: true,
+        hasControls: true,
+        hasBorders: true,
+        splitByGrapheme: true,
+        breakWords: true
+    });
+
+    fabricCanvas.remove(textObj);
     fabricCanvas.add(textbox);
     textbox.bringToFront();
-    rect.sendToBack();
+
     syncRectToText(rect, textbox);
 
     textbox.setCoords();
     textbox.dirty = true;
     fabricCanvas.requestRenderAll();
 
-    // Forzado extra de redraw (resuelve el texto invisible inicial)
     setTimeout(() => {
         textbox.set({ dirty: true });
         fabricCanvas.requestRenderAll();
-    }, 50);
+    }, 0);
 
     ['moving', 'scaling', 'changed', 'rotated'].forEach(ev => {
         textbox.on(ev, () => syncRectToText(rect, textbox));
@@ -514,7 +526,7 @@ async function generatePreview() {
 function addTextAndLogoToCanvas(data, width, height) {
     console.log("Agregando textos y logo...");
 
-    // Reset viewport para evitar transformaciones raras
+    // Reset viewport
     fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
 
     // Categoría
@@ -606,4 +618,4 @@ function changeSize() {
     resizeAllObjects(w, h);
 }
 
-// (Mantén las funciones updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... como las tenías en tu versión anterior)
+// (Mantén las funciones updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... como las tenías)
