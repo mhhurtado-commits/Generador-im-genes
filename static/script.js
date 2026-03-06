@@ -40,19 +40,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         transparentCorners: false
     });
 
-    // Carga de fuentes con nombres EXACTOS del repositorio
     try {
         await Promise.all([
             loadFont('Bebas Neue', '/static/fonts/BebasNeue-Regular.ttf'),
             loadFont('Economica', '/static/fonts/Economica-Regular.ttf'),
             loadFont('Montserrat', '/static/fonts/Montserrat-Regular.ttf')
         ]);
-        console.log("Fuentes cargadas correctamente");
+        console.log("Fuentes cargadas OK");
     } catch (err) {
-        console.warn("Algunas fuentes no cargaron → usando Arial", err);
+        console.warn("Algunas fuentes fallaron → usando Arial", err);
     }
 
-    // Eventos (con protección contra null)
+    // Eventos (con protección)
     document.getElementById('blurRange')?.addEventListener('input', () => {
         document.getElementById('blurValue') && (document.getElementById('blurValue').textContent = document.getElementById('blurRange').value);
         updateImageFX();
@@ -150,7 +149,7 @@ function bringAllToFront() {
     fabricCanvas.renderAll();
 }
 
-// ---------- LIMPIAR FORMULARIO ----------
+// ---------- LIMPIAR ----------
 function clearForm() {
     document.getElementById('urlInput') && (document.getElementById('urlInput').value = '');
     document.getElementById('imageUpload') && (document.getElementById('imageUpload').value = '');
@@ -191,20 +190,8 @@ function drawCenterLines() {
     removeCenterLines();
     const w = fabricCanvas.width;
     const h = fabricCanvas.height;
-    centerLines.v = new fabric.Line([w / 2, 0, w / 2, h], {
-        stroke: '#00bfff',
-        strokeWidth: 4,
-        selectable: false,
-        evented: false,
-        opacity: 0.7
-    });
-    centerLines.h = new fabric.Line([0, h / 2, w, h / 2], {
-        stroke: '#00bfff',
-        strokeWidth: 4,
-        selectable: false,
-        evented: false,
-        opacity: 0.7
-    });
+    centerLines.v = new fabric.Line([w / 2, 0, w / 2, h], { stroke: '#00bfff', strokeWidth: 4, selectable: false, evented: false, opacity: 0.7 });
+    centerLines.h = new fabric.Line([0, h / 2, w, h / 2], { stroke: '#00bfff', strokeWidth: 4, selectable: false, evented: false, opacity: 0.7 });
     fabricCanvas.add(centerLines.v, centerLines.h);
     centerLines.v.bringToFront();
     centerLines.h.bringToFront();
@@ -277,24 +264,32 @@ function createTextWithRect(text, opts, bgColor, bgOpacity, textColor) {
         selectable: true,
         hasControls: true,
         hasBorders: true,
-        padding: 24, // más espacio para que se vea bien
+        padding: 30, // más espacio
         fontFamily: opts.fontFamily || 'Arial',
-        fontSize: opts.fontSize || 90, // más grande para visibilidad inmediata
-        lineHeight: 1.1,
-        splitByGrapheme: true // mejor manejo de texto largo
+        fontSize: opts.fontSize || 100, // grande para visibilidad inmediata
+        lineHeight: 1.0,
+        splitByGrapheme: true // clave para texto largo
     });
 
     fabricCanvas.add(rect);
     fabricCanvas.add(textbox);
     textbox.bringToFront();
-    rect.sendToBack(); // fondo detrás del texto
+    rect.sendToBack();
     syncRectToText(rect, textbox);
+
+    textbox.setCoords();
+    fabricCanvas.requestRenderAll();
+
+    // Forzar redraw inmediato
+    setTimeout(() => {
+        textbox.set({ dirty: true });
+        fabricCanvas.requestRenderAll();
+    }, 0);
 
     ['moving', 'scaling', 'changed', 'rotated'].forEach(ev => {
         textbox.on(ev, () => syncRectToText(rect, textbox));
     });
 
-    fabricCanvas.renderAll();
     return { textbox, rect };
 }
 
@@ -604,3 +599,5 @@ function changeSize() {
     const [w, h] = document.getElementById('sizeSelect')?.value.split('x').map(Number) || [1080, 1080];
     resizeAllObjects(w, h);
 }
+
+// (Mantén las funciones updateImageFX, adjustImageToCanvas, syncRectToText, toggleColorPicker, handle... como las tenías)
