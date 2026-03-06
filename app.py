@@ -7,19 +7,16 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from io import BytesIO
 import base64
 
-# Configuración de carpetas
-app = Flask(__name__, 
-            static_folder='static', 
+app = Flask(__name__,
+            static_folder='static',
             template_folder='templates')
 
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('static', filename)
-
+# Ruta raíz → sirve index.html
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# Endpoint para extraer metadatos
 @app.route('/api/extract', methods=['POST'])
 def extract():
     url = request.json.get('url')
@@ -27,92 +24,102 @@ def extract():
         return jsonify({'error': 'URL no proporcionada'}), 400
 
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Lanza error si no es 200
+
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Título
+        # Título (mejor fallback)
         titulo_tag = soup.find('meta', property='og:title')
-        titulo = titulo_tag['content'] if titulo_tag else (soup.title.string if soup.title else "Sin título")
+        titulo = titulo_tag['content'] if titulo_tag else \
+                 (soup.title.string.strip() if soup.title else "Sin título")
 
-        # Categoría
+        # Categoría (de la URL)
         url_part = urlparse(url)
         path_parts = [p for p in url_part.path.split('/') if p]
         categoria = path_parts[0].upper() if path_parts else "NOTICIAS"
-        
-        # Imagen
+
+        # Imagen OG
         meta_image = soup.find('meta', property='og:image')
         imagen_url = meta_image['content'] if meta_image else None
 
         if not imagen_url:
-            return jsonify({'error': 'No se encontró imagen en la noticia'}), 404
+            return jsonify({'error': 'No se encontró imagen en la noticia (og:image)'}), 404
 
         return jsonify({
             'titulo': titulo,
             'categoria': categoria,
             'imagen_url': imagen_url
         })
+
+    except requests.RequestException as e:
+        return jsonify({'error': f'Error al obtener la página: {str(e)}'}), 502
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Procesamiento de imagen (ahora se llama desde el frontend con imagen_url)
 @app.route('/api/process-image', methods=['POST'])
 def process_image():
     data = request.json
-    # CAMBIO CLAVE: Ahora buscamos 'imagen_url' que viene del extractor
     imagen_url = data.get('imagen_url')
-    
+
     if not imagen_url:
         return jsonify({'error': 'No se proporcionó URL de imagen'}), 400
 
     try:
-        # Descargar la imagen directamente desde el servidor (evita bloqueos de navegador)
         headers = {'User-Agent': 'Mozilla/5.0'}
-        img_response = requests.get(imagen_url, headers=headers, timeout=10)
+        img_response = requests.get(imagen_url, headers=headers, timeout=15)
+        img_response.raise_for_status()
+
         img = Image.open(BytesIO(img_response.content))
-        
-        # Convertir a RGB
+
+        # Convertir a RGB si es necesario
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
 
-        # Redimensionado inteligente (Cover)
+        # Redimensionado inteligente (cover)
         target_width, target_height = 1080, 1080
         img_width, img_height = img.size
-        
         img_ratio = img_width / img_height
         target_ratio = target_width / target_height
 
         if img_ratio > target_ratio:
-            # Más ancha que alta
             new_height = target_height
             new_width = int(img_ratio * new_height)
         else:
-            # Más alta que ancha
             new_width = target_width
             new_height = int(new_width / img_ratio)
 
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        
-        # Recortar al centro
-        left = (new_width - target_width) / 2
-        top = (new_height - target_height) / 2
-        right = (new_width + target_width) / 2
-        bottom = (new_height + target_height) / 2
+
+        # Recorte centrado
+        left = (new_width - target_width) // 2
+        top = (new_height - target_height) // 2
+        right = left + target_width
+        bottom = top + target_height
         img = img.crop((left, top, right, bottom))
-        
-        # Exportar a Base64
+
+        # Guardar como JPEG base64
         buffered = BytesIO()
-        img.save(buffered, format="JPEG", quality=85)
+        img.save(buffered, format="JPEG", quality=85, optimize=True)
         base64_img = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
         return jsonify({
             'image_base64': base64_img,
-            'width': 1080,
-            'height': 1080
+            'width': target_width,
+            'height': target_height
         })
-    except Exception as e:
-        print(f"Error procesando imagen: {e}")
-        return jsonify({'error': str(e)}), 500
 
+    except requests.RequestException as e:
+        return jsonify({'error': f'Error descargando imagen: {str(e)}'}), 502
+    except Exception as e:
+        return jsonify({'error': f'Error procesando imagen: {str(e)}'}), 500
+
+
+# Solo para desarrollo local (NO se ejecuta en Render)
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
